@@ -1,0 +1,14 @@
+# Optional long-lived device authentication over an existing Web composition.
+# A later profile layer must replace the Consumer row's complete config with
+# deployment-specific public origin and Cloudflare Access values.
+
+- insert:
+    - id: device-auth-domain
+      name: '@deepseek-ai/dsh-host-device-auth-web/provider'
+      config:
+        sessionIdleMs: 31536000000
+        sessionRenewBeforeMs: 2592000000
+        maxLabelBytes: 256
+
+    - id: device-auth-web
+      name: '@deepseek-ai/dsh-host-device-auth-web'

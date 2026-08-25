@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-identity 组为每个 harness home 提供一个匿名 id，该安装的遥测、反馈与 DeepSeek 请求会把它附加到各自的记录上，因此离开同一个 home 的所有内容都能被识别为来自同一套安装，而无需识别用户身份。无需配置任何东西：id 会在这些功能之一首次运行时自动出现，并在文件被删除前保持稳定。本组只有一个包；本页是组的映射，包 README 负责细节。
+identity 组为每个 harness home 提供一个匿名 id，该安装的遥测、反馈与 DeepSeek 请求会把它附加到各自的记录上，因此离开同一个 home 的所有内容都能被识别为来自同一套安装，而无需识别用户身份；组内还包括面向 Web 部署的长期设备认证。无需配置任何东西：id 会在这些功能之一首次运行时自动出现，并在文件被删除前保持稳定。本页是组的映射，包 README 负责细节。
 
 ## 目录
 
@@ -23,6 +23,8 @@ identity 组为每个 harness home 提供一个匿名 id，该安装的遥测、
 | 包 | 职责 |
 |---|---|
 | [`anonymous-user-id`](anonymous-user-id/README.zh.md) | 让每个 harness home 拥有一个匿名 id，遥测、反馈与 DeepSeek 请求把它附加到记录上，使来自同一安装的记录无需识别用户即可被辨认 |
+| [`device-auth`](device-auth/README.zh.md) | 长期设备认证 Service Definition |
+| [`device-auth-domain`](device-auth-domain/README.zh.md) | 持久化 storage-domain provider |
 
 <a id="related-documentation"></a>
 ## 相关文档

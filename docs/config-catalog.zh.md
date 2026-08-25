@@ -461,6 +461,52 @@ export interface ToolResultPruneConfig {
 
 来源：[`packages/compaction/compaction-tool-result-pruner/src/types.ts:4`](../packages/compaction/compaction-tool-result-pruner/src/types.ts)
 
+<a id="deepseek-aidsh-console-local"></a>
+
+## `@deepseek-ai/dsh-console-local`
+
+需要：`workspaceRegistry` · `subprocess`
+
+```ts config-catalog
+/** Fully explicit local console provider configuration. */
+export interface Config {
+  /** Interactive shell executable resolved at service initialization. */
+  shellPath: string
+  /** Arguments appended to the resolved shell executable. */
+  shellArgs: string[]
+  /** `TERM` value supplied as the only explicit child environment entry. */
+  term: string
+  /** Positive terminal-session termination grace in milliseconds. */
+  disposeGraceMs: number
+  /** Maximum number of raw terminal output bytes retained in memory. */
+  outputRetentionBytes: number
+  /** Maximum number of retained bytes returned by one output read. */
+  maxReadBytes: number
+  /** Maximum simultaneous output waiters admitted for one console. */
+  maxOutputWaitersPerConsole: number
+}
+```
+
+来源：[`packages/console/console-local/src/config.ts:2`](../packages/console/console-local/src/config.ts)
+
+<a id="deepseek-aidsh-console-remote"></a>
+
+## `@deepseek-ai/dsh-console-remote`
+
+需要：`consoles`
+
+```ts config-catalog
+/** Required Remote polling and input limits. */
+export interface Config {
+  /** Maximum duration accepted for one long-poll read. */
+  readonly maxPollWaitMs: number
+  /** Maximum UTF-8 byte length accepted for one write. */
+  readonly maxWriteBytes: number
+}
+```
+
+来源：[`packages/console/console-remote/src/index.ts:18`](../packages/console/console-remote/src/index.ts)
+
 <a id="deepseek-aidsh-cordis-host-runner"></a>
 
 ## `@deepseek-ai/dsh-cordis-host-runner`
@@ -496,6 +542,26 @@ export interface Config {
 ```
 
 来源：[`packages/credentials/credentials-local/src/index.ts:64`](../packages/credentials/credentials-local/src/index.ts)
+
+<a id="deepseek-aidsh-device-auth-domain"></a>
+
+## `@deepseek-ai/dsh-device-auth-domain`
+
+需要：`storageDomain`
+
+```ts config-catalog
+/** Deployment-varying browser-session and label limits. */
+export interface Config {
+  /** Browser-session idle lifetime in milliseconds. */
+  sessionIdleMs: number
+  /** Remaining lifetime at or below which authentication extends the same session. */
+  sessionRenewBeforeMs: number
+  /** Maximum UTF-8 byte length accepted for a device label. */
+  maxLabelBytes: number
+}
+```
+
+来源：[`packages/identity/device-auth-domain/src/index.ts:28`](../packages/identity/device-auth-domain/src/index.ts)
 
 <a id="deepseek-aidsh-e2b"></a>
 
@@ -780,6 +846,32 @@ export interface Config {
 ```
 
 来源：[`packages/hooks/hooks-codex/src/index.ts:45`](../packages/hooks/hooks-codex/src/index.ts)
+
+<a id="deepseek-aidsh-host-device-auth-web"></a>
+
+## `@deepseek-ai/dsh-host-device-auth-web`
+
+依赖：`webServer` · `deviceAuth`
+
+```ts config-catalog
+/** Deployment-specific public origin, enrollment identity, and request limits. */
+export interface Config {
+  /** Exact public HTTPS origin protected by this plugin. */
+  publicOrigin: string
+  /** Exact Cloudflare Access HTTPS issuer origin. */
+  accessIssuer: string
+  /** Cloudflare Access application audience claim. */
+  accessAudience: string
+  /** Exact email claim permitted to enroll devices. */
+  accessEmail: string
+  /** JWT timestamp tolerance in seconds. */
+  accessClockToleranceSeconds: number
+  /** Maximum URL-encoded form body size in bytes. */
+  maxFormBytes: number
+}
+```
+
+来源：[`packages/host/device-auth-web/src/index.ts:27`](../packages/host/device-auth-web/src/index.ts)
 
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
@@ -3376,7 +3468,9 @@ export interface Config {
 - `@deepseek-ai/dsh-attachment` — 抽象 `AttachmentStore`（[`packages/attachment/attachment/src/index.ts`](../packages/attachment/attachment/src/index.ts)）
 - `@deepseek-ai/dsh-code-runtime` — 抽象 `CodeRuntime`（[`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts)）
 - `@deepseek-ai/dsh-compaction` — 抽象 `CompactionEngine`（[`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts)）
+- `@deepseek-ai/dsh-console` — 抽象 `ConsoleRuntime`（[`packages/console/console/src/index.ts`](../packages/console/console/src/index.ts)）
 - `@deepseek-ai/dsh-credentials` — 抽象 `Credentials`（[`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts)）
+- `@deepseek-ai/dsh-device-auth` — 抽象 `DeviceAuthService`（[`packages/identity/device-auth/src/index.ts`](../packages/identity/device-auth/src/index.ts)）
 - `@deepseek-ai/dsh-file-reference` — 抽象 `FileReferenceService`（[`packages/context/file-reference/src/index.ts`](../packages/context/file-reference/src/index.ts)）
 - `@deepseek-ai/dsh-fs` — 抽象 `FileSystem`（[`packages/fs/fs/src/index.ts`](../packages/fs/fs/src/index.ts)）
 - `@deepseek-ai/dsh-host-directory-picker` — 抽象 `DirectoryPicker`（[`packages/host/directory-picker/src/index.ts`](../packages/host/directory-picker/src/index.ts)）
@@ -3389,6 +3483,7 @@ export interface Config {
 - `@deepseek-ai/dsh-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts)）
 - `@deepseek-ai/dsh-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts)）
+
 ## 库包（无插件入口）
 
 由其他包作为库导入；`cordis.yml` 无法加载它们。

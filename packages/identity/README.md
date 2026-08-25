@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The identity group provides one anonymous id per harness home that the installation's telemetry, feedback, and DeepSeek requests attach to their records, so everything leaving one home can be recognized as coming from the same installation without identifying the user. There is nothing to configure: the id appears automatically the first time one of those features runs and stays stable until its file is deleted. The group has one package; this page maps it, and the package README owns the details.
+The identity group provides one anonymous id per harness home that the installation's telemetry, feedback, and DeepSeek requests attach to their records, so everything leaving one home can be recognized as coming from the same installation without identifying the user, and long-lived device authentication for Web deployments. There is nothing to configure: the id appears automatically the first time one of those features runs and stays stable until its file is deleted. This page maps the group's packages; the package READMEs own the details.
 
 ## Table of Contents
 
@@ -23,6 +23,8 @@ The identity group provides one anonymous id per harness home that the installat
 | Package | Role |
 |---|---|
 | [`anonymous-user-id`](anonymous-user-id/README.md) | Gives every harness home one anonymous id that telemetry, feedback, and DeepSeek requests attach to their records, so records from one installation can be recognized without identifying the user |
+| [`device-auth`](device-auth/README.md) | Long-lived device authentication Service Definition |
+| [`device-auth-domain`](device-auth-domain/README.md) | Durable storage-domain provider |
 
 <a id="related-documentation"></a>
 ## Related documentation

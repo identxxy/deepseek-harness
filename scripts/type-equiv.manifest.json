@@ -1022,6 +1022,16 @@
       "source": "packages/terminal/terminal/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/console.md",
+      "symbol": "ConsoleAccess",
+      "source": "packages/console/console/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/console.md",
+      "symbol": "ConsoleOutputObservation",
+      "source": "packages/console/console/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/terminal.md",
       "symbol": "TerminalSessionStatus",
       "source": "packages/terminal/terminal/src/types.ts"

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-浏览器经由 `dsh-host-webserver` 通过 HTTP 访问 web GUI：一个 `node:http` 服务器，其他插件在其中注册具名路由、upgrade 路由、index 启动输入与一个回退 handler。它不了解任何 harness 概念，也不提供任何文件服务——`/api` 桥接、插件 bundle、HMR（热模块替换）事件流与 SPA dist 都属于注册它们的插件。路由匹配顺序固定不变：先在整张表中匹配精确 route，再匹配最长前缀，最后交给回退 handler。它只服务浏览器；Electron 通过 `file://` 加载 dist，并经 IPC 桥接承载 fetch。
+浏览器经由 `dsh-host-webserver` 通过 HTTP 访问 web GUI：一个 `node:http` 服务器，其他插件在其中注册具名路由、upgrade 路由、index 启动输入与一个回退 handler；可选的应用级 ingress gate 会在路由查找之前过滤 HTTP 与 upgrade 载体。它不了解任何 harness 概念，也不提供任何文件服务——`/api` 桥接、插件 bundle、HMR（热模块替换）事件流与 SPA dist 都属于注册它们的插件。路由匹配顺序固定不变：先经过 ingress gate，再在整张表中匹配精确 route，再匹配最长前缀，最后交给回退 handler。它只服务浏览器；Electron 通过 `file://` 加载 dist，并经 IPC 桥接承载 fetch。
 
 ## 目录
 
@@ -42,7 +42,7 @@ kind: "package-reference"
 
 ### 注册路由
 
-`register(route)` 添加具名的 `exact`／`prefix` HTTP route，`registerUpgrade(route)` 为精确 pathname 添加 upgrade route，两者返回的 disposer 都会移除注册。同一张表内的重复路径会抛错——route 模式是组合层约定，冲突即配置错误。HTTP 匹配先在整张表中匹配精确 route，再匹配最长前缀，最后交给回退 handler；upgrade 只做精确匹配，未命中连接直接关闭。
+`register(route)` 添加具名的 `exact`／`prefix` HTTP route，`registerUpgrade(route)` 为精确 pathname 添加 upgrade route，两者返回的 disposer 都会移除注册。同一张表内的重复路径会抛错——route 模式是组合层约定，冲突即配置错误。`registerIngressGate(gate)` 认领唯一的应用级 ingress 席位：其 HTTP 或 upgrade 方法在 route 查找之前运行（包括未命中请求）；`allow` 会把载体交给 route 表，`handled` 表示入口所有者已经结束响应或 socket。第二个 ingress 所有者会抛错，其 disposer 释放该席位。HTTP 匹配顺序固定：ingress gate、整张表中的精确 route、最长前缀、回退 handler；upgrade 在精确匹配之前运行 ingress gate，未命中连接直接关闭。
 
 ### 回退席位
 
@@ -52,7 +52,7 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 
 ### 失败时的行为
 
-监听失败（例如 EADDRINUSE）会以绑定诊断信息拒绝插件初始化。handler 抛错的 HTTP 请求会得到 400——若响应头已经发出则销毁 socket——并记录 warning；它绝不会退出进程。upgrade handler 抛错或升级 socket 出现传输错误时，会记录 warning 并销毁对应 socket。
+监听失败（例如 EADDRINUSE）会以绑定诊断信息拒绝插件初始化。HTTP ingress gate 或 route handler 抛错时，服务器会响应 400——若响应头已经发出则销毁 socket——并记录 warning，但绝不会退出进程。upgrade ingress 或 route handler 抛错，或升级 socket 出现传输错误时，会记录 warning 并销毁对应 socket。upgrade socket 会在异步 ingress 决策之前进入服务所有权，因此资源释放会销毁 pending 载体，随后返回的 `allow` 也无法让已销毁 socket 到达 route。
 
 -----
 
@@ -109,7 +109,7 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 
 这些限制说明服务器在何处有意保持最小。它们是当前包约束，不是任务积压。
 
-- **不提供服务器级 TLS、认证或来源策略**：`dsh-client-connection` 等 route owner 会实施自己的请求策略。绑定非回环地址仍会向该网络公开未受保护的 route 与静态资源。
+- **不提供服务器级 TLS、认证或来源策略**：`dsh-client-connection` 等 route owner 会实施自己的请求策略；ingress 席位允许一个插件为 HTTP 与 upgrade 统一执行一项策略，但本包不提供具体策略。绑定非回环地址仍会向该网络公开未受保护的 route 与静态资源。
 - **Socket 选项固定不变**：配置只选择绑定宿主与端口；在具体部署产生需求前，backlog 和其他 socket 设置仍保持内部实现。
 
 <a id="dev-note"></a>

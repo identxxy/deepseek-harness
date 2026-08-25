@@ -1,0 +1,35 @@
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  config:
+    host: 127.0.0.1
+    port: 0
+
+- id: storage
+  name: '@deepseek-ai/dsh-storage'
+
+- id: storage-json
+  name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: !!js process.env.DSH_DEVICE_AUTH_SNAPSHOT_STORAGE_ROOT
+
+- id: storage-domain
+  name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
+
+- id: device-auth-domain
+  name: '@deepseek-ai/dsh-device-auth-domain'
+  config:
+    sessionIdleMs: 31536000000
+    sessionRenewBeforeMs: 2592000000
+    maxLabelBytes: 256
+
+- id: device-auth-web
+  name: '@deepseek-ai/dsh-host-device-auth-web'
+  config:
+    publicOrigin: https://dsh.example
+    accessIssuer: https://access.example
+    accessAudience: snapshot-audience
+    accessEmail: owner@example.com
+    accessClockToleranceSeconds: 2
+    maxFormBytes: 4096

@@ -200,12 +200,22 @@ export interface SubprocessHandle {
  */
 export type SubprocessTerminalSignal = 'SIGINT' | 'SIGTERM' | 'SIGKILL' | 'SIGTSTP' | 'SIGHUP'
 
+/** Terminal dimensions used for a live PTY resize. */
+export interface SubprocessTerminalSize {
+  /** Terminal row count. */
+  readonly rows: number
+  /** Terminal column count. */
+  readonly cols: number
+}
+
 /** A fully specified terminal-process spawn. */
 export interface SubprocessTerminalSpawnSpec {
   /** Executable and arguments; `argv[0]` is the program. */
   argv: readonly string[]
   /** Working directory in this subprocess provider's execution world. */
   cwd: string
+  /** Terminal type advertised by the PTY and exposed to the child as `TERM`. */
+  term: string
   /** Explicit environment layered after the provider's ambient scrub. */
   env?: Record<string, string> | undefined
   /** Initial terminal row count. */
@@ -245,6 +255,11 @@ export interface SubprocessTerminalHandle {
    */
   write(data: string): Promise<void>
   /**
+   * Resize the live terminal; rejects after the top-level process exits.
+   * @param size - new terminal row and column counts.
+   */
+  resize(size: SubprocessTerminalSize): Promise<void>
+  /**
    * Inspect the current foreground process group.
    * @returns its id and input-wait fact, or undefined when no foreground group can be resolved.
    */
@@ -257,7 +272,7 @@ export interface SubprocessTerminalHandle {
   signalForeground(signal: SubprocessTerminalSignal): Promise<number>
   /**
    * Idempotently terminate every terminal-session member the provider can still observe and await quiescence.
-   * After settlement, no write, inspection, or signal call remains in flight.
+   * After settlement, no write, resize, inspection, or signal call remains in flight.
    * Providers document substrate-specific observability limits.
    */
   terminate(): Promise<void>

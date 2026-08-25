@@ -1,0 +1,10 @@
+- main:
+  - heading "Devices" [level=1]
+  - table:
+    - rowgroup:
+      - row "Label Owner Status Actions":
+        - columnheader "Label"
+        - columnheader "Owner"
+        - columnheader "Status"
+        - columnheader "Actions"
+    - rowgroup

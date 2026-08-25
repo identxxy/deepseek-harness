@@ -46,6 +46,7 @@ if (kind === 'ordinary') {
   await ctx.subprocess.spawnTerminal({
     argv: [process.execPath, managedTree, treeState],
     cwd: process.cwd(),
+    term: 'dumb',
     rows: 24,
     cols: 80,
     graceMs: 30_000,

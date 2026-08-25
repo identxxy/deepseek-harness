@@ -22,6 +22,9 @@ const requiredArtifacts = [
   'packages/core/session/lib/index.js',
   'packages/goal/goal/lib/index.js',
   'packages/goal/goal/lib/typert.host.js',
+  'packages/console/console-remote/lib/index.js',
+  'packages/console/console/lib/index.js',
+  'packages/console/console-remote/lib/typert.host.js',
   'packages/api/gateway/lib/client.js',
   'packages/api/gateway/lib/index.js',
   'packages/typert/registry/lib/client.js',
@@ -37,6 +40,9 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       apiGatewayHost: 'packages/api/gateway/lib/index.js',
       connectionClient: 'packages/client/connection/lib/client.js',
       connectionHost: 'packages/client/connection/lib/index.js',
+      consoleRemote: 'packages/console/console-remote/lib/index.js',
+      console: 'packages/console/console/lib/index.js',
+      consoleTypert: 'packages/console/console-remote/lib/typert.host.js',
       goal: 'packages/goal/goal/lib/index.js',
       goalTypert: 'packages/goal/goal/lib/typert.host.js',
       registryClient: 'packages/typert/registry/lib/client.js',
@@ -57,6 +63,9 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       const { default: GoalService } = await import(urls.goal)
       const { default: SessionProjectionRegistry } = await import(urls.sessionProjections)
       const { TYPERT } = await import(urls.goalTypert)
+      const { default: ConsoleRemoteService } = await import(urls.consoleRemote)
+      const { ConsoleError } = await import(urls.console)
+      const { TYPERT: CONSOLE_TYPERT } = await import(urls.consoleTypert)
       const { default: TypertRegistry } = await import(urls.registryHost)
       const { Session, SessionId } = await import(urls.session)
 
@@ -85,6 +94,34 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       await host.plugin(AgentRegistry)
       await host.plugin(TypertRemoteService)
       await host.plugin(SessionProjectionRegistry)
+      const consoleAccess = { consoleId: 'built-console', capability: 'built-capability' }
+      const writes = []
+      const signals = []
+      let stopped = false
+      let consoleWaitStarted = false
+      let consoleHostObservedAbort = false
+      host.provide('consoles', {
+        snapshot(access) {
+          if (access.capability !== consoleAccess.capability) {
+            throw new ConsoleError('ACCESS_DENIED', 'denied')
+          }
+          return { id: consoleAccess.consoleId, workspaceId: 'workspace', cwd: '/workspace', pid: 42, size: { rows: 24, cols: 80 }, status: { kind: 'running' }, oldestOutputByte: 0, nextOutputByte: 2 }
+        },
+        readOutput(_access, fromByte) { return { kind: 'data', data: fromByte === 0 ? Uint8Array.from([0, 255]) : new Uint8Array(), fromByte, nextByte: fromByte === 0 ? 2 : fromByte, availableThroughByte: 2 } },
+        waitOutput(_access, _fromByte, signal) {
+          consoleWaitStarted = true
+          return new Promise((_, reject) => signal.addEventListener('abort', () => {
+            consoleHostObservedAbort = true
+            reject(signal.reason)
+          }, { once: true }))
+        },
+        write(_access, data) { writes.push(data); return Promise.resolve() },
+        resize() { return Promise.resolve() },
+        signal(_access, signal) { signals.push(signal); return Promise.resolve({ delivered: true, targetPgid: 7 }) },
+        stop() { stopped = true; return Promise.resolve() },
+      })
+      await host.plugin(ConsoleRemoteService, { maxPollWaitMs: 500, maxWriteBytes: 16 })
+      host.typert.register(CONSOLE_TYPERT)
       await host.plugin(GoalService)
       host.typert.register(TYPERT)
 
@@ -190,6 +227,22 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       )
       const agentContext = client.extend({ builtAgentId: scopedAgent.id })
       const scopedResult = await agentContext.remote.goals.create({ objective: 'scoped goal', maxGoalRounds: 3 })
+      const consoleRead = await client.remote.consoles.read({ access: consoleAccess, fromByte: 0, waitMs: 10 })
+      const consoleDenied = await client.remote.consoles.snapshot({ access: { ...consoleAccess, capability: 'wrong' } })
+      const consoleAbortController = new AbortController()
+      const consoleAbortPromise = client.remote.consoles.read({ access: consoleAccess, fromByte: 2, waitMs: 500 }, consoleAbortController.signal).then(result => {
+        if (!result.ok) throw result.error
+        return result.value
+      })
+      while (!consoleWaitStarted) await new Promise(resolveWait => setTimeout(resolveWait, 1))
+      consoleAbortController.abort(new Error('built caller abort'))
+      let consoleCallerAborted = false
+      try { await consoleAbortPromise } catch { consoleCallerAborted = true }
+      await client.remote.consoles.signal({ access: consoleAccess, signal: 'SIGINT' })
+      let consoleInvalidSignalRejected = false
+      try { await client.remote.consoles.signal({ access: consoleAccess, signal: 'SIGQUIT' }) } catch { consoleInvalidSignalRejected = true }
+      await client.remote.consoles.write({ access: consoleAccess, data: 'hello' })
+      await client.remote.consoles.stop({ access: consoleAccess })
       const result = {
         invalidRejected,
         rootResult: rootResult.value,
@@ -199,6 +252,14 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         scopedGoal: host.goals.get(scopedAgent)?.objective,
         rootEvents: rootAgent.session.events.length,
         scopedEvents: scopedAgent.session.events.length,
+        consoleRead: consoleRead.value,
+        writes,
+        stopped,
+        consoleDenied: consoleDenied.value,
+        consoleCallerAborted,
+        consoleHostObservedAbort,
+        consoleInvalidSignalRejected,
+        signals,
       }
 
       await client.fiber.dispose()
@@ -221,6 +282,14 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedGoal: string
       rootEvents: number
       scopedEvents: number
+      consoleRead: { ok: true; value: { output: { dataBase64: string }; console: { pid?: number } } }
+      writes: string[]
+      stopped: boolean
+      consoleDenied: { ok: false; error: { code: string } }
+      consoleCallerAborted: boolean
+      consoleHostObservedAbort: boolean
+      consoleInvalidSignalRejected: boolean
+      signals: string[]
     }
     expect(output).toMatchObject({
       invalidRejected: true,
@@ -231,6 +300,14 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedGoal: 'scoped goal',
       rootEvents: 2,
       scopedEvents: 1,
+      consoleRead: { ok: true, value: { output: { dataBase64: 'AP8=' }, console: {} } },
+      writes: ['hello'],
+      stopped: true,
+      consoleDenied: { ok: false, error: { code: 'ACCESS_DENIED' } },
+      consoleCallerAborted: true,
+      consoleHostObservedAbort: true,
+      consoleInvalidSignalRejected: true,
+      signals: ['SIGINT'],
     })
     expect(output.rootResult.ref.id).toMatch(/^goal-/)
     expect(output.scopedResult.ref.id).toMatch(/^goal-/)

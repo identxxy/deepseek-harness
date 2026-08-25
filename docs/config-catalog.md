@@ -459,6 +459,52 @@ export interface ToolResultPruneConfig {
 
 Source: [`packages/compaction/compaction-tool-result-pruner/src/types.ts:4`](../packages/compaction/compaction-tool-result-pruner/src/types.ts)
 
+<a id="deepseek-aidsh-console-local"></a>
+
+## `@deepseek-ai/dsh-console-local`
+
+Requires: `workspaceRegistry` · `subprocess`
+
+```ts config-catalog
+/** Fully explicit local console provider configuration. */
+export interface Config {
+  /** Interactive shell executable resolved at service initialization. */
+  shellPath: string
+  /** Arguments appended to the resolved shell executable. */
+  shellArgs: string[]
+  /** `TERM` value supplied as the only explicit child environment entry. */
+  term: string
+  /** Positive terminal-session termination grace in milliseconds. */
+  disposeGraceMs: number
+  /** Maximum number of raw terminal output bytes retained in memory. */
+  outputRetentionBytes: number
+  /** Maximum number of retained bytes returned by one output read. */
+  maxReadBytes: number
+  /** Maximum simultaneous output waiters admitted for one console. */
+  maxOutputWaitersPerConsole: number
+}
+```
+
+Source: [`packages/console/console-local/src/config.ts:2`](../packages/console/console-local/src/config.ts)
+
+<a id="deepseek-aidsh-console-remote"></a>
+
+## `@deepseek-ai/dsh-console-remote`
+
+Requires: `consoles`
+
+```ts config-catalog
+/** Required Remote polling and input limits. */
+export interface Config {
+  /** Maximum duration accepted for one long-poll read. */
+  readonly maxPollWaitMs: number
+  /** Maximum UTF-8 byte length accepted for one write. */
+  readonly maxWriteBytes: number
+}
+```
+
+Source: [`packages/console/console-remote/src/index.ts:18`](../packages/console/console-remote/src/index.ts)
+
 <a id="deepseek-aidsh-cordis-host-runner"></a>
 
 ## `@deepseek-ai/dsh-cordis-host-runner`
@@ -494,6 +540,26 @@ export interface Config {
 ```
 
 Source: [`packages/credentials/credentials-local/src/index.ts:64`](../packages/credentials/credentials-local/src/index.ts)
+
+<a id="deepseek-aidsh-device-auth-domain"></a>
+
+## `@deepseek-ai/dsh-device-auth-domain`
+
+Requires: `storageDomain`
+
+```ts config-catalog
+/** Deployment-varying browser-session and label limits. */
+export interface Config {
+  /** Browser-session idle lifetime in milliseconds. */
+  sessionIdleMs: number
+  /** Remaining lifetime at or below which authentication extends the same session. */
+  sessionRenewBeforeMs: number
+  /** Maximum UTF-8 byte length accepted for a device label. */
+  maxLabelBytes: number
+}
+```
+
+Source: [`packages/identity/device-auth-domain/src/index.ts:28`](../packages/identity/device-auth-domain/src/index.ts)
 
 <a id="deepseek-aidsh-e2b"></a>
 
@@ -779,6 +845,32 @@ export interface Config {
 
 Source: [`packages/hooks/hooks-codex/src/index.ts:45`](../packages/hooks/hooks-codex/src/index.ts)
 
+<a id="deepseek-aidsh-host-device-auth-web"></a>
+
+## `@deepseek-ai/dsh-host-device-auth-web`
+
+Requires: `webServer` · `deviceAuth`
+
+```ts config-catalog
+/** Deployment-specific public origin, enrollment identity, and request limits. */
+export interface Config {
+  /** Exact public HTTPS origin protected by this plugin. */
+  publicOrigin: string
+  /** Exact Cloudflare Access HTTPS issuer origin. */
+  accessIssuer: string
+  /** Cloudflare Access application audience claim. */
+  accessAudience: string
+  /** Exact email claim permitted to enroll devices. */
+  accessEmail: string
+  /** JWT timestamp tolerance in seconds. */
+  accessClockToleranceSeconds: number
+  /** Maximum URL-encoded form body size in bytes. */
+  maxFormBytes: number
+}
+```
+
+Source: [`packages/host/device-auth-web/src/index.ts:28`](../packages/host/device-auth-web/src/index.ts)
+
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
 ## `@deepseek-ai/dsh-host-directory-picker-browse`
@@ -829,7 +921,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/webserver/src/index.ts:59`](../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:93`](../packages/host/webserver/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -3374,7 +3466,9 @@ Abstract service classes — a deployment loads a concrete implementation packag
 - `@deepseek-ai/dsh-attachment` — abstract `AttachmentStore` ([`packages/attachment/attachment/src/index.ts`](../packages/attachment/attachment/src/index.ts))
 - `@deepseek-ai/dsh-code-runtime` — abstract `CodeRuntime` ([`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts))
 - `@deepseek-ai/dsh-compaction` — abstract `CompactionEngine` ([`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts))
+- `@deepseek-ai/dsh-console` — abstract `ConsoleRuntime` ([`packages/console/console/src/index.ts`](../packages/console/console/src/index.ts))
 - `@deepseek-ai/dsh-credentials` — abstract `CredentialProvider` ([`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts))
+- `@deepseek-ai/dsh-device-auth` — abstract `DeviceAuthService` ([`packages/identity/device-auth/src/index.ts`](../packages/identity/device-auth/src/index.ts))
 - `@deepseek-ai/dsh-file-reference` — abstract `FileReferenceService` ([`packages/context/file-reference/src/index.ts`](../packages/context/file-reference/src/index.ts))
 - `@deepseek-ai/dsh-fs` — abstract `FileSystem` ([`packages/fs/fs/src/index.ts`](../packages/fs/fs/src/index.ts))
 - `@deepseek-ai/dsh-host-directory-picker` — abstract `DirectoryPicker` ([`packages/host/directory-picker/src/index.ts`](../packages/host/directory-picker/src/index.ts))

@@ -85,6 +85,8 @@ class FakeTerminalSandbox {
   readonly commands: string[] = []
   readonly commandOptions: CommandOptions[] = []
   readonly inputs: Array<{ pid: number; data: Buffer }> = []
+  readonly resizeInvocations: Array<{ pid: number; size: { rows: number; cols: number } }> = []
+  readonly resizes: Array<{ pid: number; size: { rows: number; cols: number } }> = []
   readonly removed: string[] = []
   readonly directories: string[] = []
   readonly writes = new Map<string, string>()
@@ -100,6 +102,7 @@ class FakeTerminalSandbox {
   commandFailure: unknown
   makeDirRequest: ((signal: AbortSignal | undefined) => Promise<void>) | undefined
   sendInputRequest: ((signal: AbortSignal | undefined) => Promise<void>) | undefined
+  resizeRequest: ((signal: AbortSignal | undefined) => Promise<void>) | undefined
   foregroundRequest: ((signal: AbortSignal | undefined) => Promise<void>) | undefined
   signalRequest: ((signal: AbortSignal | undefined) => Promise<void>) | undefined
   sessionGroupsFailure: unknown
@@ -222,6 +225,17 @@ class FakeTerminalSandbox {
           }
         }
       },
+      resize: async (
+        pid: number,
+        size: { rows: number; cols: number },
+        options?: { signal?: AbortSignal },
+      ): Promise<void> => {
+        this.resizeInvocations.push({ pid, size })
+        options?.signal?.throwIfAborted()
+        await this.resizeRequest?.(options?.signal)
+        options?.signal?.throwIfAborted()
+        this.resizes.push({ pid, size })
+      },
     },
   } as unknown as Sandbox
 }
@@ -238,10 +252,11 @@ function spec(overrides: Partial<SubprocessTerminalSpawnSpec> = {}): SubprocessT
   return {
     argv: ['/bin/bash', '--noprofile', '--norc'],
     cwd: '/workspace',
+    term: 'xterm-256color',
     rows: 24,
     cols: 80,
     graceMs: 5,
-    env: { TERM: 'dumb', DSH_SESSION_ID: 'owner', TOKEN_EXPLICIT: 'kept' },
+    env: { DSH_SESSION_ID: 'owner', TOKEN_EXPLICIT: 'kept' },
     ...overrides,
   }
 }
@@ -292,6 +307,7 @@ describe('E2B terminal allocation', () => {
     expect(fake.inputs[0]?.data.toString()).toContain("exec /bin/bash '/runtime/terminal-one/runner.bash'")
     expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('KEEP=visible\0')
     expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('UNICODE=你好\0')
+    expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('TERM=xterm-256color\0')
     expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('TOKEN_EXPLICIT=kept\0')
     expect(fake.writes.get('/runtime/terminal-one/environment')).not.toContain('secret')
     expect(fake.writes.get('/runtime/terminal-one/environment')).not.toContain('DSH_STALE')
@@ -309,7 +325,9 @@ describe('E2B terminal allocation', () => {
     expect(output).toBe('requested-shell$ ')
 
     await terminal.write('echo ok\r')
+    await terminal.resize({ rows: 40, cols: 120 })
     expect(fake.inputs.at(-1)?.data.toString()).toBe('echo ok\r')
+    expect(fake.resizes).toEqual([{ pid: 123, size: { rows: 40, cols: 120 } }])
     await expect(terminal.inspectForeground()).resolves.toEqual({ processGroupId: 456, inputWaiting: false })
     await expect(terminal.signalForeground('SIGINT')).resolves.toBe(456)
     expect(fake.commands).toContain('kill -INT -- -456')
@@ -539,7 +557,9 @@ describe('E2B terminal lifecycle', () => {
     const writeStarted = Promise.withResolvers<AbortSignal>()
     const inspectStarted = Promise.withResolvers<AbortSignal>()
     const signalStarted = Promise.withResolvers<AbortSignal>()
+    const resizeStarted = Promise.withResolvers<AbortSignal>()
     fake.sendInputRequest = holdRequestUntilAbort(writeStarted)
+    fake.resizeRequest = holdRequestUntilAbort(resizeStarted)
     let foregroundRequests = 0
     fake.foregroundRequest = async (signal) => {
       foregroundRequests += 1
@@ -551,20 +571,25 @@ describe('E2B terminal lifecycle', () => {
       signalCompleted = true
     }
     const write = terminal.write('late input')
+    const resize = terminal.resize({ rows: 40, cols: 120 })
     const inspect = terminal.inspectForeground()
-    await Promise.all([writeStarted.promise, inspectStarted.promise])
+    await Promise.all([writeStarted.promise, resizeStarted.promise, inspectStarted.promise])
     const signal = terminal.signalForeground('SIGINT')
     await signalStarted.promise
 
     const terminating = terminal.terminate()
     await expect(write).rejects.toThrow('terminal is terminating')
+    await expect(resize).rejects.toThrow('terminal is terminating')
     await expect(inspect).rejects.toThrow('terminal is terminating')
     await expect(signal).rejects.toThrow('terminal is terminating')
     await terminating
     expect(signalCompleted).toBe(false)
     expect(fake.inputs).toHaveLength(1)
     const commandCount = fake.commands.length
+    const resizeInvocationCount = fake.resizeInvocations.length
     await expect(terminal.write('after termination')).rejects.toThrow('terminal is terminating')
+    await expect(terminal.resize({ rows: 25, cols: 90 })).rejects.toThrow('terminal is terminating')
+    expect(fake.resizeInvocations).toHaveLength(resizeInvocationCount)
     await expect(terminal.inspectForeground()).rejects.toThrow('terminal is terminating')
     await expect(terminal.signalForeground('SIGINT')).rejects.toThrow('terminal is terminating')
     expect(fake.commands).toHaveLength(commandCount)
@@ -580,6 +605,9 @@ describe('E2B terminal lifecycle', () => {
     await expect(terminal.done).resolves.toEqual({ exitCode: 7, signal: null })
     await ended
     await expect(terminal.write('late')).rejects.toThrow('exited')
+    const resizeInvocationCount = fake.resizeInvocations.length
+    await expect(terminal.resize({ rows: 25, cols: 90 })).rejects.toThrow('exited')
+    expect(fake.resizeInvocations).toHaveLength(resizeInvocationCount)
     fake.foregroundFailure = commandError(1)
     await expect(terminal.inspectForeground()).resolves.toBeUndefined()
     await expect(terminal.signalForeground('SIGINT')).rejects.toThrow('cannot resolve foreground process group')

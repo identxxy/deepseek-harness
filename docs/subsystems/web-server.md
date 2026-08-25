@@ -94,6 +94,15 @@ registerUpgrade(route: WebUpgradeRoute): () => void
 registerFallback(handler: WebRoute['handler']): () => void
 
 /**
+ * Register the single application-wide ingress owner. A second owner throws
+ * because all HTTP and upgrade dispatch must pass through one policy result.
+ * The caller must attach the returned disposer to its Cordis effect.
+ * @param gate - Handles both HTTP and upgrade carriers before route lookup.
+ * @returns the disposer releasing the ingress seat.
+ */
+registerIngressGate(gate: WebIngressGate): () => void
+
+/**
  * Register a raw-HTML index transform, the escape hatch for markup no
  * {@link IndexInjection} row expresses: {@link renderIndex} applies taps in
  * registration order after rendering the structured rows.

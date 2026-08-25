@@ -43,6 +43,7 @@ class StubSubprocessRuntime extends SubprocessRuntime {
       output: new PassThrough(),
       done: Promise.resolve({ exitCode: 0, signal: null }),
       write: async () => {},
+      resize: async () => {},
       inspectForeground: async () => ({ processGroupId: 1, inputWaiting: true }),
       signalForeground: async () => 1,
       terminate: async () => {},
@@ -66,6 +67,16 @@ describe('SubprocessRuntime seam', () => {
     await expect(handle.waitForExit()).resolves.toBe(true)
     const outcome = await handle.done
     expect(outcome.exitCode).toBe(0)
+
+    const terminal = await ctx.subprocess.spawnTerminal({
+      argv: ['sh'],
+      cwd: '/stub',
+      term: 'dumb',
+      rows: 24,
+      cols: 80,
+      graceMs: 1,
+    })
+    await expect(terminal.resize({ rows: 30, cols: 100 })).resolves.toBeUndefined()
   })
 
   it('loading a second implementation throws (one subprocess service per context — cordis standard)', async () => {

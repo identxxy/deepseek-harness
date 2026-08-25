@@ -42,7 +42,7 @@ Set `compression: 'gzip'` to wrap eligible socket-backed responses without chang
 
 ### Registering routes
 
-`register(route)` adds a named `exact` or `prefix` HTTP route, `registerUpgrade(route)` adds an upgrade route for an exact pathname, and both return a disposer that removes the registration. A duplicate path within either table throws — route patterns are a composition-level contract, so a collision is a misconfiguration. HTTP matching is exact over the whole table, then longest prefix, then the fallback handler; upgrades match exactly and unmatched connections are closed.
+`register(route)` adds a named `exact` or `prefix` HTTP route, `registerUpgrade(route)` adds an upgrade route for an exact pathname, and both return a disposer that removes the registration. A duplicate path within either table throws — route patterns are a composition-level contract, so a collision is a misconfiguration. `registerIngressGate(gate)` claims the single application-wide ingress seat: its HTTP or upgrade method runs before route lookup, including unmatched requests; `allow` delegates to the route tables, while `handled` means the ingress owner has completed the response or socket. A second ingress owner throws, and its disposer releases the seat. HTTP matching is fixed: ingress owner, exact over the whole table, then longest prefix, then the fallback handler; upgrades run the ingress owner before exact matching, and unmatched connections are closed.
 
 ### The fallback seat
 
@@ -52,7 +52,7 @@ Index startup inputs are two layers. `collectIndexInjections()` gathers a fresh 
 
 ### Behavior under failure
 
-A listen failure (for example EADDRINUSE) rejects plugin initialization with the bind diagnostic. An HTTP request whose handler throws is answered 400 — or the socket destroyed when headers are already out — and logged as a warning; it never exits the process. An upgrade-handler exception or upgraded-socket transport error logs a warning and destroys its socket.
+A listen failure (for example EADDRINUSE) rejects plugin initialization with the bind diagnostic. An HTTP ingress-gate or route-handler exception is answered 400 — or the socket destroyed when headers are already out — and logged as a warning; it never exits the process. An upgrade-ingress or route-handler exception, or an upgraded-socket transport error, logs a warning and destroys its socket. Upgrade sockets enter service ownership before an asynchronous ingress decision, so disposal destroys pending carriers and a later `allow` cannot reach a route on a destroyed socket.
 
 -----
 
@@ -109,7 +109,7 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define where the server is intentionally minimal. They are current package constraints, not a task backlog.
 
-- **No server-wide TLS, authentication, or origin policy** — route owners such as `dsh-client-connection` enforce their own request policy. Binding a non-loopback address still exposes unprotected routes and static assets to that network.
+- **No server-wide TLS, authentication, or origin policy** — route owners such as `dsh-client-connection` enforce their own request policy; the ingress seat lets one plugin enforce one policy across HTTP and upgrades, but this package supplies none. Binding a non-loopback address still exposes unprotected routes and static assets to that network.
 - **Socket options are fixed** — config selects the bind host and port, while backlog and other socket settings remain internal until a deployment needs them.
 
 <a id="dev-note"></a>

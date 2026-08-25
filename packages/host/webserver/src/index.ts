@@ -1,9 +1,10 @@
 /**
- * @deepseek-ai/dsh-host-webserver — node:http route registration with optional
- * gzip, index injection, and one fallback seat. It knows no harness concepts
- * and serves no files; the composing application owns dist serving. Electron
- * uses file:// plus IPC instead, and this package never prints the URL.
- * Route handlers retain direct response ownership.
+ * @deepseek-ai/dsh-host-webserver — node:http route registration with an
+ * optional application-wide ingress gate, optional gzip, index injection, and
+ * one fallback seat. It knows no harness concepts and serves no files; the
+ * composing application owns dist serving. Electron uses file:// plus IPC
+ * instead, and this package never prints the URL. Route handlers retain direct
+ * response ownership; the ingress owner owns the carrier it handles.
  */
 
 import { createServer } from 'node:http'
@@ -53,6 +54,39 @@ export interface WebUpgradeRoute {
   path: string
   /** Owns protocol negotiation and the upgraded socket after dispatch. */
   handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>
+}
+
+/** The ingress owner either delegates dispatch or completes the carrier itself. */
+export type WebIngressDecision = { kind: 'allow' } | { kind: 'handled' }
+
+/** One application-wide owner that filters HTTP and upgrade carriers before route lookup. */
+export interface WebIngressGate {
+  /**
+   * Decide whether HTTP dispatch may continue. A `handled` result means this
+   * method owns and completes the response.
+   * @param req - Incoming HTTP request before route lookup.
+   * @param res - Response owned by this method only when it returns `handled`.
+   * @returns whether the webserver delegates to its route tables.
+   */
+  handleHttp(req: IncomingMessage, res: ServerResponse): WebIngressDecision | Promise<WebIngressDecision>
+  /**
+   * Decide whether upgrade dispatch may continue. A `handled` result means
+   * this method owns and completes the socket and any bytes in `head`.
+   * @param req - Incoming upgrade request before route lookup.
+   * @param socket - Upgrade socket owned by this method only when it returns `handled`.
+   * @param head - Bytes received after the HTTP upgrade headers.
+   * @returns whether the webserver delegates to its upgrade route table.
+   */
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): WebIngressDecision | Promise<WebIngressDecision>
+}
+
+interface WebIngressRegistration {
+  gate: WebIngressGate
+}
+
+/** Reject a future decision variant until dispatch assigns it semantics. */
+function assertNever(value: never): never {
+  throw new Error(`webserver: unsupported ingress decision ${String(value)}`)
 }
 
 /** Web server listen and response-compression config. */
@@ -135,6 +169,7 @@ export class WebServer extends Service {
   private readonly upgrades = new Map<string, WebUpgradeRoute>()
   private readonly upgradedSockets = new Set<Duplex>()
   private readonly indexTaps: ((html: string) => string)[] = []
+  private ingressRegistration: WebIngressRegistration | undefined
   private fallback: WebRoute['handler'] | undefined
   private server!: Server
   private listenedPort!: number
@@ -202,6 +237,24 @@ export class WebServer extends Service {
   }
 
   /**
+   * Register the single application-wide ingress owner. A second owner throws
+   * because all HTTP and upgrade dispatch must pass through one policy result.
+   * The caller must attach the returned disposer to its Cordis effect.
+   * @param gate - Handles both HTTP and upgrade carriers before route lookup.
+   * @returns the disposer releasing the ingress seat.
+   */
+  registerIngressGate(gate: WebIngressGate): () => void {
+    if (this.ingressRegistration !== undefined) {
+      throw new Error('webserver: ingress gate already registered')
+    }
+    const registration = { gate }
+    this.ingressRegistration = registration
+    return () => {
+      if (this.ingressRegistration === registration) this.ingressRegistration = undefined
+    }
+  }
+
+  /**
    * Register a raw-HTML index transform, the escape hatch for markup no
    * {@link IndexInjection} row expresses: {@link renderIndex} applies taps in
    * registration order after rendering the structured rows.
@@ -219,6 +272,15 @@ export class WebServer extends Service {
   /** Listen; resolves once the socket is bound (rejection = FAILED fiber). */
   async [Service.init](): Promise<void> {
     const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+      const ingressGate = this.ingressRegistration?.gate
+      if (ingressGate !== undefined) {
+        const decision = await ingressGate.handleHttp(req, res)
+        switch (decision.kind) {
+          case 'allow': break
+          case 'handled': return
+          default: assertNever(decision)
+        }
+      }
       /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server
       requests; the field is only optional on the client-side IncomingMessage type */
       const rawPath = new URL(req.url ?? '/', 'http://x').pathname
@@ -264,29 +326,30 @@ export class WebServer extends Service {
         socket.off('error', onError)
         this.upgradedSockets.delete(socket)
       })
-      let route: WebUpgradeRoute | undefined
-      try {
-        /* v8 ignore next -- node:http always sets url on server requests. */
-        route = this.upgrades.get(new URL(req.url ?? '/', 'http://x').pathname)
-      } catch (error) {
-        this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
-        socket.destroy()
-        return
-      }
-      if (route === undefined) {
-        socket.destroy()
-        return
-      }
       this.upgradedSockets.add(socket)
-      try {
-        Promise.resolve(route.handler(req, socket, head)).catch((error: unknown) => {
-          this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
+      const dispatch = async (): Promise<void> => {
+        const ingressGate = this.ingressRegistration?.gate
+        if (ingressGate !== undefined) {
+          const decision = await ingressGate.handleUpgrade(req, socket, head)
+          switch (decision.kind) {
+            case 'allow': break
+            case 'handled': return
+            default: assertNever(decision)
+          }
+        }
+        if (socket.destroyed) return
+        /* v8 ignore next -- node:http always sets url on server requests. */
+        const route = this.upgrades.get(new URL(req.url ?? '/', 'http://x').pathname)
+        if (route === undefined) {
           socket.destroy()
-        })
-      } catch (error) {
+          return
+        }
+        await route.handler(req, socket, head)
+      }
+      dispatch().catch((error: unknown) => {
         this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
         socket.destroy()
-      }
+      })
     })
 
     await new Promise<void>((resolve, reject) => {
