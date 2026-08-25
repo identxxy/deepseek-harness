@@ -165,11 +165,11 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     }
     spec.signal?.throwIfAborted()
     const options: IPtyForkOptions = {
-      name: 'dumb',
+      name: spec.term,
       rows: spec.rows,
       cols: spec.cols,
       cwd: spec.cwd,
-      env: childEnv(spec.env),
+      env: { ...childEnv(spec.env), TERM: spec.term },
     }
     const inspector = this.terminalInspector ?? createProcessInspector()
     const terminal = nodePty.spawn(file, [...spec.argv.slice(1)], options)

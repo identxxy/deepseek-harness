@@ -17,6 +17,7 @@ import type {
   SubprocessTerminalForeground,
   SubprocessTerminalHandle,
   SubprocessTerminalSignal,
+  SubprocessTerminalSize,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
 import type E2BRuntime from '@deepseek-ai/dsh-e2b'
@@ -311,6 +312,14 @@ export class E2BTerminalHandle implements SubprocessTerminalHandle {
   }
 
   /** @inheritdoc */
+  resize(size: SubprocessTerminalSize): Promise<void> {
+    return this.trackOperation(async (signal) => {
+      if (this.topLevelExited) throw new Error('terminal process has exited')
+      await this.sandbox.pty.resize(this.pid, size, { signal })
+    })
+  }
+
+  /** @inheritdoc */
   inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
     return this.trackOperation(signal => this.inspectForegroundOnce(signal))
   }
@@ -479,7 +488,7 @@ export async function spawnE2BTerminal(
   try {
     const ambient = await readRemoteEnvironment(sandbox, spec.signal)
     controlEnvs = bootstrapEnvironment(ambient)
-    const environment = serializeRemoteEnvironment(ambient, spec.env)
+    const environment = serializeRemoteEnvironment(ambient, { ...spec.env, TERM: spec.term })
     const argv = serializeValues(spec.argv, 'argv')
     stateDirectoryCreated = true
     await sandbox.files.makeDir(stateDir, signalOpts(spec.signal))

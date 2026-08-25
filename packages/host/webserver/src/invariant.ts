@@ -15,13 +15,10 @@ export const name = 'host-webserver-invariant'
 export const inject = ['invariants']
 
 /**
- * Owned relation: HTTP and upgrade route registrations and their disposers must stay
- * symmetric — after the owning fiber of a registered route unloads, the
- * route table must no longer answer for its path (a stale route would keep
- * serving a disposed plugin's handler). Checked on every fiber teardown
- * (cordis 'internal/plugin'): the service's own registry state is compared
- * against the set of live fibers' registrations indirectly, by probing that
- * dispose really removed the entry — the register() disposer contract.
+ * Owned relation: HTTP and upgrade routes must be registrable again after
+ * their disposer runs. Otherwise an unloaded plugin leaves a handler active
+ * or prevents its replacement from loading. Checked on every fiber teardown
+ * (`internal/plugin`) with reserved-path register/dispose probes.
  */
 const install: InvariantInstaller = (ctx, fail) => {
   ctx.on('internal/plugin', () => {
@@ -44,7 +41,7 @@ const install: InvariantInstaller = (ctx, fail) => {
       server.registerUpgrade(upgradeProbe)()
       server.registerUpgrade(upgradeProbe)()
     } catch {
-      fail('webServer route disposer left a route registered — route tables and fiber lifecycles diverged')
+      fail('webServer route disposer left a route registered after its lifecycle ended')
     }
   }, { global: true })
 }

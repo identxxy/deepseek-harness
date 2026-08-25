@@ -9,6 +9,7 @@ import type {
   SubprocessTerminalForeground,
   SubprocessTerminalHandle,
   SubprocessTerminalSignal,
+  SubprocessTerminalSize,
 } from '@deepseek-ai/dsh-subprocess'
 import type { ProcessIdentity, ProcessInspector } from './process-inspector.ts'
 
@@ -78,6 +79,13 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   async write(data: string): Promise<void> {
     if (this.exited) throw new Error('terminal process has exited')
     this.terminal.write(data)
+  }
+
+  // node-pty resizes synchronously; the seam returns a promise for remote transports.
+  // oxlint-disable-next-line typescript/require-await -- Preserve promise rejection semantics at the async provider contract.
+  async resize(size: SubprocessTerminalSize): Promise<void> {
+    if (this.exited) throw new Error('terminal process has exited')
+    this.terminal.resize(size.cols, size.rows)
   }
 
   // Local inspection is synchronous; the seam returns a promise for remote transports.

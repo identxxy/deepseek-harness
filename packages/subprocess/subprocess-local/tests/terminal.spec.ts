@@ -10,6 +10,7 @@ import type { SubprocessTerminalSignal } from '@deepseek-ai/dsh-subprocess'
 class FakePty {
   pid = 123
   readonly writes: string[] = []
+  readonly resizes: Array<[number, number]> = []
   readonly kills: string[] = []
   autoExitOnKill = true
   throwKill = false
@@ -36,6 +37,8 @@ class FakePty {
   }
 
   write(data: string): void { this.writes.push(data) }
+
+  resize(cols: number, rows: number): void { this.resizes.push([cols, rows]) }
 
   kill(signal?: string): void {
     if (this.throwKill) throw new Error('process raced')
@@ -180,7 +183,9 @@ describe('LocalTerminalHandle', () => {
 
     pty.emitData('hello €')
     await handle.write('input\r')
+    await handle.resize({ rows: 40, cols: 120 })
     expect(pty.writes).toEqual(['input\r'])
+    expect(pty.resizes).toEqual([[120, 40]])
     expect(await handle.inspectForeground()).toEqual({ processGroupId: 456, inputWaiting: true })
     expect(await handle.signalForeground('SIGINT')).toBe(456)
     expect(inspector.groups).toEqual([[456, 'SIGINT']])
@@ -206,6 +211,7 @@ describe('LocalTerminalHandle', () => {
     expect(await handle.done).toEqual({ exitCode: 3, signal: null })
     await handle.terminate()
     await expect(handle.write('late')).rejects.toThrow('has exited')
+    await expect(handle.resize({ rows: 25, cols: 90 })).rejects.toThrow('has exited')
   })
 
   it('keeps the shell alive until forced descendants leave', async () => {

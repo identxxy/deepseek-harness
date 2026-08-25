@@ -212,6 +212,70 @@ abstract deleteRecord(key: CredentialKey): Promise<void>
 
 Source: [`packages/credentials/credentials/src/index.ts`](../../packages/credentials/credentials/src/index.ts)
 
+<a id="ctxdeviceauth--deviceauthservice-abstract-seam"></a>
+
+### `ctx.deviceAuth` — `DeviceAuthService` (abstract seam)
+
+Abstract durable device-authentication service.
+
+```ts cordis-catalog
+/**
+ * Enroll a new device under an identity already verified by the caller.
+ * @param principal - Verified enrollment identity.
+ * @param label - Human device label.
+ * @returns newly issued permanent token and browser session.
+ */
+abstract enroll(principal: Omit<VerifiedDevicePrincipal, 'id'>, label: string): Promise<DeviceAuthIssueResult>
+
+/**
+ * Exchange a permanent recovery credential for a fresh browser session.
+ * @param deviceToken - Permanent recovery credential.
+ * @returns a fresh browser session replacing any active session.
+ */
+abstract login(deviceToken: string): Promise<DeviceLoginResult>
+
+/**
+ * Authenticate one active browser session and optionally apply rolling renewal when due.
+ * @param deviceId - Owning device id.
+ * @param sessionId - Browser session id.
+ * @param secret - Browser session secret.
+ * @param options - Explicit carrier renewal policy.
+ * @returns authentication and rolling-renewal decision.
+ */
+abstract authenticate( deviceId: DeviceId, sessionId: DeviceSessionId, secret: string, options: DeviceAuthenticateOptions, ): Promise<DeviceAuthentication>
+
+/**
+ * Durably remove an authenticated browser session.
+ * @param deviceId - Owning device id.
+ * @param sessionId - Browser session id.
+ * @param secret - Browser session secret.
+ * @returns after durable invalidation.
+ */
+abstract logout(deviceId: DeviceId, sessionId: DeviceSessionId, secret: string): Promise<void>
+
+/**
+ * List the durable device registry without credential material.
+ * @returns every device as a secret-free projection.
+ */
+abstract listDevices(): readonly DeviceView[]
+
+/**
+ * Revoke a device credential and its active browser session.
+ * @param deviceId - Device to revoke.
+ * @returns after durable revocation.
+ */
+abstract revokeDevice(deviceId: DeviceId): Promise<void>
+
+/**
+ * Replace a device's permanent credential and remove its active browser session.
+ * @param deviceId - Device whose permanent token is replaced.
+ * @returns the secret-free device view and newly issued one-time-visible token.
+ */
+abstract rotateDeviceToken(deviceId: DeviceId): Promise<DeviceTokenRotationResult>
+```
+
+Source: [`packages/identity/device-auth/src/index.ts`](../../packages/identity/device-auth/src/index.ts)
+
 <a id="authorization-events"></a>
 
 ### `authorization/*` events
@@ -285,4 +349,26 @@ Committed change to a provider-managed credential source: a `set`, an `unset`, o
 ```
 
 Source: [`packages/credentials/credentials/src/types.ts`](../../packages/credentials/credentials/src/types.ts)
+
+<a id="device-auth-events"></a>
+
+### `device-auth/*` events
+
+<a id="device-authsession-invalidated--emit"></a>
+
+#### `device-auth/session-invalidated` — emit
+
+A durably removed or replaced active browser session.
+
+```ts cordis-catalog
+/**
+ * A durably removed or replaced active browser session.
+ * @param deviceId - Owning device.
+ * @param sessionId - Session that can no longer authenticate.
+ * @mode emit
+ */
+'device-auth/session-invalidated'(deviceId: DeviceId, sessionId: DeviceSessionId): void
+```
+
+Source: [`packages/identity/device-auth/src/index.ts`](../../packages/identity/device-auth/src/index.ts)
 <!-- END GENERATED cordis-surface -->

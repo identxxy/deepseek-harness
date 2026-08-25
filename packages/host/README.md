@@ -2,12 +2,13 @@
 
 English | [中文](README.zh.md)
 
-The host side of the dsh web GUI: the API gateway every client shape shares, and the plain HTTP server it rides on. The browser side lives in [`client/`](../client/README.md); the composed application is [`apps/cli`](../../apps/cli/README.md) booting the [`dsh-base` bundle](../bundle/base/cordis.patch.yml) serving [`apps/web`](../../apps/web/). All **product** packages.
+The host side of the dsh web GUI: the API gateway every client shape shares, and the plain HTTP server it rides on. The browser side lives in [`client/`](../client/README.md); the composed application is [`apps/cli`](../../apps/cli/README.md) booting the [`dsh-base` bundle](../bundle/base/cordis.patch.yml) serving [`apps/web`](../../apps/web/). The optional [`device-auth-web`](device-auth-web/README.md) Profile Bundle adds durable device authentication to an existing Web composition. All **product** packages.
 
 | Package | Role | ctx key |
 |---|---|---|
 | [`apiproxy/`](apiproxy/README.md) | Shared host API gateway and wire contract | `ctx.apiProxy` |
 | [`webserver/`](webserver/README.md) | HTTP route carrier | `ctx.webServer` |
+| [`device-auth-web/`](device-auth-web/README.md) | Device-authenticated Web ingress, enrollment, and login | consumes `ctx.webServer`, `ctx.deviceAuth` |
 | [`frontend-static/`](frontend-static/README.md) | SPA dist server on the webserver fallback seat | consumes `ctx.webServer` |
 | [`directory-picker/`](directory-picker/README.md) | Workspace-directory picking seam | `ctx.directoryPicker` |
 | [`directory-picker-native/`](directory-picker-native/README.md) | Native directory-picker backend and browser interaction | registers `ctx.directoryPicker` |

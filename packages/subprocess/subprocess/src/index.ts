@@ -31,6 +31,7 @@ export type {
   SubprocessTerminalForeground,
   SubprocessTerminalHandle,
   SubprocessTerminalSignal,
+  SubprocessTerminalSize,
   SubprocessTerminalSpawnSpec,
 } from './types.ts'
 

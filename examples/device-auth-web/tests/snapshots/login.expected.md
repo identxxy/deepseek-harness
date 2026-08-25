@@ -1,0 +1,5 @@
+- main:
+  - heading "Device login" [level=1]
+  - text: Permanent token
+  - textbox "Permanent token"
+  - button "Log in"

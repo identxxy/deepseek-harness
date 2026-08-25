@@ -15,7 +15,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import HttpServer, { renderIndexInjections } from '../src/index.ts'
+import InvariantRegistry from '@deepseek-ai/dsh-invariants'
+import HttpServer, { renderIndexInjections, type WebIngressGate } from '../src/index.ts'
+import * as WebServerInvariant from '../src/invariant.ts'
 
 let root: string | undefined
 let context: Context | undefined
@@ -82,6 +84,44 @@ async function upgrade(port: number, path: string): Promise<ReturnType<typeof co
   ].join('\r\n'))
   const [data] = await response as [Buffer]
   expect(String(data)).toContain('101 Switching Protocols')
+  return socket
+}
+
+/** Send one upgrade request and collect the first response or clean close. */
+async function probeUpgrade(port: number, path: string): Promise<{ data: string; closed: boolean }> {
+  const socket = connect(port, '127.0.0.1')
+  socket.on('error', () => { /* A reset is a valid rejected-upgrade outcome. */ })
+  await once(socket, 'connect')
+  const outcome = Promise.race([
+    once(socket, 'data').then(([data]) => ({ data: String(data), closed: false })),
+    once(socket, 'close').then(() => ({ data: '', closed: true })),
+  ])
+  socket.write([
+    `GET ${path} HTTP/1.1`,
+    `Host: 127.0.0.1:${String(port)}`,
+    'Connection: Upgrade',
+    'Upgrade: dsh-test',
+    '',
+    '',
+  ].join('\r\n'))
+  const result = await outcome
+  socket.destroy()
+  return result
+}
+
+/** Open an upgrade carrier without waiting for the server to settle it. */
+async function openUpgrade(port: number, path: string): Promise<ReturnType<typeof connect>> {
+  const socket = connect(port, '127.0.0.1')
+  socket.on('error', () => { /* Teardown may reset the pending carrier. */ })
+  await once(socket, 'connect')
+  socket.write([
+    `GET ${path} HTTP/1.1`,
+    `Host: 127.0.0.1:${String(port)}`,
+    'Connection: Upgrade',
+    'Upgrade: dsh-test',
+    '',
+    '',
+  ].join('\r\n'))
   return socket
 }
 
@@ -246,6 +286,190 @@ describe('real Loader composition', () => {
       { kind: 'script', placement: 'head', text: 'H' },
       { kind: 'script', placement: 'body', text: 'B' },
     ])).toBe('<script>H</script><main>x</main><script>B</script>')
+  })
+
+  it('runs the single ingress owner before every HTTP and upgrade dispatch', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const port = server.port
+    const seenHttp: string[] = []
+    const seenUpgrade: string[] = []
+    let handledHttpRouteCalls = 0
+    let handledUpgradeRouteCalls = 0
+
+    server.register({ kind: 'exact', path: '/exact', handler: (_req, res) => { res.end('EXACT') } })
+    server.register({ kind: 'prefix', path: '/prefix', handler: (_req, res) => { res.end('PREFIX') } })
+    server.register({
+      kind: 'exact',
+      path: '/blocked',
+      handler: (_req, res) => { handledHttpRouteCalls += 1; res.end('ROUTE') },
+    })
+    server.registerUpgrade({
+      path: '/upgrade',
+      handler: (_req, socket) => {
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+      },
+    })
+    server.registerUpgrade({
+      path: '/upgrade-blocked',
+      handler: () => { handledUpgradeRouteCalls += 1 },
+    })
+
+    const gate: WebIngressGate = {
+      async handleHttp(req, res) {
+        await Promise.resolve()
+        const pathname = new URL(req.url ?? '/', 'http://x').pathname
+        seenHttp.push(pathname)
+        if (pathname === '/blocked') {
+          res.writeHead(401)
+          res.end('BLOCKED')
+          return { kind: 'handled' }
+        }
+        if (pathname === '/http-throw') throw new Error('http ingress failure')
+        return { kind: 'allow' }
+      },
+      async handleUpgrade(req, socket) {
+        await Promise.resolve()
+        const pathname = new URL(req.url ?? '/', 'http://x').pathname
+        seenUpgrade.push(pathname)
+        if (pathname === '/upgrade-blocked') {
+          socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+          return { kind: 'handled' }
+        }
+        if (pathname === '/upgrade-throw') throw new Error('upgrade ingress failure')
+        return { kind: 'allow' }
+      },
+    }
+    const releaseGate = server.registerIngressGate(gate)
+    expect(() => server.registerIngressGate(gate)).toThrow(/ingress gate already registered/)
+
+    expect((await request(port, '/exact')).body).toBe('EXACT')
+    expect((await request(port, '/prefix/leaf')).body).toBe('PREFIX')
+    expect((await request(port, '/unclaimed')).status).toBe(404)
+    server.registerFallback((_req, res) => { res.end('FALLBACK') })
+    expect((await request(port, '/fallback')).body).toBe('FALLBACK')
+    expect((await request(port, '/blocked')).body).toBe('BLOCKED')
+    expect(handledHttpRouteCalls).toBe(0)
+    expect(await request(port, '/http-throw')).toMatchObject({ status: 400, body: '' })
+    expect(seenHttp).toEqual(['/exact', '/prefix/leaf', '/unclaimed', '/fallback', '/blocked', '/http-throw'])
+    expect((await request(port, '/exact')).body).toBe('EXACT')
+
+    const allowedUpgrade = await probeUpgrade(port, '/upgrade')
+    expect(allowedUpgrade.data).toContain('101 Switching Protocols')
+    const blockedUpgrade = await probeUpgrade(port, '/upgrade-blocked')
+    expect(blockedUpgrade.data).toContain('401 Unauthorized')
+    expect(handledUpgradeRouteCalls).toBe(0)
+    expect(await probeUpgrade(port, '/upgrade-missing')).toMatchObject({ data: '', closed: true })
+    expect(await probeUpgrade(port, '/upgrade-throw')).toMatchObject({ data: '', closed: true })
+    expect(seenUpgrade).toEqual(['/upgrade', '/upgrade-blocked', '/upgrade-missing', '/upgrade-throw'])
+    expect((await request(port, '/exact')).body).toBe('EXACT')
+
+    releaseGate()
+    const releaseReplacement = server.registerIngressGate(gate)
+    releaseGate()
+    expect(() => server.registerIngressGate(gate)).toThrow(/ingress gate already registered/)
+    releaseReplacement()
+    let syncHttpRouteCalls = 0
+    let syncUpgradeRouteCalls = 0
+    server.register({
+      kind: 'exact',
+      path: '/sync-blocked',
+      handler: () => { syncHttpRouteCalls += 1 },
+    })
+    server.registerUpgrade({
+      path: '/upgrade-sync-blocked',
+      handler: () => { syncUpgradeRouteCalls += 1 },
+    })
+    const releaseSyncGate = server.registerIngressGate({
+      handleHttp(req, res) {
+        if (req.url === '/sync-throw') throw new Error('synchronous HTTP ingress failure')
+        if (req.url === '/sync-blocked') {
+          res.writeHead(403)
+          res.end('SYNC BLOCKED')
+          return { kind: 'handled' }
+        }
+        return { kind: 'allow' }
+      },
+      handleUpgrade(req, socket) {
+        if (req.url === '/upgrade-sync-throw') throw new Error('synchronous upgrade ingress failure')
+        if (req.url === '/upgrade-sync-blocked') {
+          socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+          return { kind: 'handled' }
+        }
+        return { kind: 'allow' }
+      },
+    })
+    expect((await request(port, '/exact')).body).toBe('EXACT')
+    expect(await request(port, '/sync-throw')).toMatchObject({ status: 400, body: '' })
+    expect(await request(port, '/sync-blocked')).toMatchObject({ status: 403, body: 'SYNC BLOCKED' })
+    expect(syncHttpRouteCalls).toBe(0)
+    expect((await probeUpgrade(port, '/upgrade')).data).toContain('101 Switching Protocols')
+    expect(await probeUpgrade(port, '/upgrade-sync-throw')).toMatchObject({ data: '', closed: true })
+    expect((await probeUpgrade(port, '/upgrade-sync-blocked')).data).toContain('403 Forbidden')
+    expect(syncUpgradeRouteCalls).toBe(0)
+    releaseSyncGate()
+    expect(() => server.registerIngressGate(gate)).not.toThrow()
+  })
+
+  it('owns ingress registration through a real Cordis effect lifecycle', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    await loaded.plugin(InvariantRegistry, { enabled: true }).await()
+    await loaded.plugin(WebServerInvariant).await()
+    const gate: WebIngressGate = {
+      handleHttp: () => ({ kind: 'allow' }),
+      handleUpgrade: () => ({ kind: 'allow' }),
+    }
+    let staleRelease!: () => void
+    const owner = loaded.plugin({
+      name: 'test-ingress-owner',
+      inject: ['webServer'],
+      apply(ctx: Context) {
+        ctx.effect(() => {
+          staleRelease = ctx.webServer.registerIngressGate(gate)
+          return staleRelease
+        }, 'test ingress owner')
+      },
+    })
+    await owner.await()
+    expect(() => loaded.webServer.registerIngressGate(gate)).toThrow(/ingress gate already registered/)
+
+    await owner.dispose()
+    const replacementRelease = loaded.webServer.registerIngressGate(gate)
+    staleRelease()
+    expect(() => loaded.webServer.registerIngressGate(gate)).toThrow(/ingress gate already registered/)
+    replacementRelease()
+    expect(() => loaded.webServer.registerIngressGate(gate)).not.toThrow()
+  })
+
+  it('closes an upgrade socket while its asynchronous ingress decision is pending', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const decision = Promise.withResolvers<{ kind: 'allow' }>()
+    let routeCalls = 0
+    let gateEnteredResolve!: () => void
+    const gateEntered = new Promise<void>((resolve) => { gateEnteredResolve = resolve })
+    loaded.webServer.registerIngressGate({
+      handleHttp: () => ({ kind: 'allow' }),
+      handleUpgrade: async () => {
+        gateEnteredResolve()
+        return decision.promise
+      },
+    })
+    loaded.webServer.registerUpgrade({
+      path: '/pending',
+      handler: () => { routeCalls += 1 },
+    })
+
+    const socket = await openUpgrade(loaded.webServer.port, '/pending')
+    await gateEntered
+    const closed = once(socket, 'close')
+    await loaded.fiber.dispose()
+    await closed
+    expect(socket.destroyed).toBe(true)
+
+    decision.resolve({ kind: 'allow' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(routeCalls).toBe(0)
   })
 
   it('fails the fiber when the port is already taken (fail-loud at activation)', { timeout: 60_000 }, async () => {

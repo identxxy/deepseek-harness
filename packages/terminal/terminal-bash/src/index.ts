@@ -182,6 +182,7 @@ export class BashTerminalBackend implements TerminalBackend {
     const terminal = await this.spawnTerminal({
       argv,
       cwd: spec.cwd ?? policy.workspaceRoot,
+      term: 'dumb',
       env: childEnvironment(spec, this.config.shellDialect),
       rows: this.config.rows,
       cols: this.config.cols,

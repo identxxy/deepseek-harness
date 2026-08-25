@@ -620,6 +620,104 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'consoleRemote',
+    summary: 'Remote-only authorized console operations under the `consoles` wire namespace.',
+    description: 'Remote-only authorized console operations under the `consoles` wire namespace.',
+    methods: [
+      {
+        signature: '@Remote(\'snapshot\') snapshot(request: ConsoleRemoteAccessRequest): ConsoleRemoteResult<ConsoleRemoteSnapshot>',
+        description: 'Project one authorized snapshot without host process coordinates.',
+        parameters: [{ name: 'request', description: 'Authorized console reference.' }],
+        returns: 'JSON-safe snapshot or business failure.',
+      },
+      {
+        signature: '@Remote(\'read\') async read(request: ConsoleRemoteReadRequest, signal: AbortSignal): Promise<ConsoleRemoteResult<ConsoleRemoteObservation>>',
+        description: 'Read immediately or wait once for output or terminal state.',
+        parameters: [{ name: 'request', description: 'Authorized cursor and requested wait.' }, { name: 'signal', description: 'Carrier cancellation.' }],
+        returns: 'bounded observation, timeout observation, or business failure.',
+      },
+      {
+        signature: '@Remote(\'write\') async write(request: ConsoleRemoteWriteRequest): Promise<ConsoleRemoteResult<null>>',
+        description: 'Write bounded UTF-8 input after capability authorization.',
+        parameters: [{ name: 'request', description: 'Authorized UTF-8 terminal input.' }],
+        returns: 'completion or business failure.',
+      },
+      {
+        signature: '@Remote(\'resize\') async resize(request: ConsoleRemoteResizeRequest): Promise<ConsoleRemoteResult<null>>',
+        description: 'Resize one authorized console.',
+        parameters: [{ name: 'request', description: 'Authorized terminal dimensions.' }],
+        returns: 'completion or business failure.',
+      },
+      {
+        signature: '@Remote(\'signal\') async signal(request: ConsoleRemoteSignalRequest): Promise<ConsoleRemoteResult<{ delivered: true; targetPgid: number }>>',
+        description: 'Signal one authorized console\'s foreground process group.',
+        parameters: [{ name: 'request', description: 'Authorized foreground signal.' }],
+        returns: 'delivery facts or business failure.',
+      },
+      {
+        signature: '@Remote(\'stop\') async stop(request: ConsoleRemoteAccessRequest): Promise<ConsoleRemoteResult<null>>',
+        description: 'Stop and remove one authorized console.',
+        parameters: [{ name: 'request', description: 'Authorized console reference.' }],
+        returns: 'completion or business failure.',
+      },
+    ],
+  },
+  {
+    key: 'consoles',
+    summary: 'Abstract host-owned console runtime.',
+    description: 'Abstract host-owned console runtime.',
+    methods: [
+      {
+        signature: 'abstract openHumanShell(request: HumanShellOpenRequest, signal?: AbortSignal): Promise<ConsoleOpenResult>',
+        description: 'Open the configured human shell in one available workspace.',
+        parameters: [{ name: 'request', description: 'Workspace and initial dimensions.' }, { name: 'signal', description: 'Allocation cancellation.' }],
+        returns: 'the authorized live console after publication.',
+      },
+      {
+        signature: 'abstract snapshot(access: ConsoleAccess): ConsoleSnapshot',
+        description: 'Read current public state without exposing the bearer capability.',
+        parameters: [{ name: 'access', description: 'Authorized console reference.' }],
+        returns: 'fresh public state.',
+      },
+      {
+        signature: 'abstract readOutput(access: ConsoleAccess, fromByte: number): ConsoleOutputRead',
+        description: 'Read one repeatable bounded page from an absolute whole-stream cursor.',
+        parameters: [{ name: 'access', description: 'Authorized console reference.' }, { name: 'fromByte', description: 'Absolute output cursor.' }],
+        returns: 'retained bytes or an explicit retention gap.',
+      },
+      {
+        signature: 'abstract waitOutput(access: ConsoleAccess, fromByte: number, signal: AbortSignal): Promise<ConsoleOutputObservation>',
+        description: 'Wait for output, a retention gap, or a terminal state transition and return one atomic observation.',
+        parameters: [{ name: 'access', description: 'Authorized console reference.' }, { name: 'fromByte', description: 'Absolute output cursor.' }, { name: 'signal', description: 'Caller cancellation for this one wait.' }],
+        returns: 'current console state and one bounded output page.',
+      },
+      {
+        signature: 'abstract write(access: ConsoleAccess, data: string): Promise<void>',
+        description: 'Deliver text to the live terminal input.',
+        parameters: [{ name: 'access', description: 'Authorized console reference.' }, { name: 'data', description: 'Terminal input text.' }],
+        returns: 'after delivery.',
+      },
+      {
+        signature: 'abstract resize(access: ConsoleAccess, size: ConsoleSize): Promise<void>',
+        description: 'Resize the live terminal and commit the dimensions after provider success.',
+        parameters: [{ name: 'access', description: 'Authorized console reference.' }, { name: 'size', description: 'New dimensions.' }],
+        returns: 'after resize.',
+      },
+      {
+        signature: 'abstract signal(access: ConsoleAccess, signal: ConsoleSignal): Promise<ConsoleSignalResult>',
+        description: 'Signal the terminal\'s current foreground process group.',
+        parameters: [{ name: 'access', description: 'Authorized console reference.' }, { name: 'signal', description: 'Foreground signal.' }],
+        returns: 'the exact process group that received the signal.',
+      },
+      {
+        signature: 'abstract stop(access: ConsoleAccess): Promise<void>',
+        description: 'Terminate the complete terminal session and remove its record.',
+        parameters: [{ name: 'access', description: 'Authorized console reference.' }],
+        returns: 'after complete session quiescence.',
+      },
+    ],
+  },
+  {
     key: 'credentials',
     summary: 'Abstract credential service over two key spaces that answer two questions.',
     description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name", layered over the process environment, the provider-managed store, and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
@@ -674,6 +772,55 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'abstract deleteRecord(key: CredentialKey): Promise<void>',
         description: 'Remove one record; removing an absent record is a no-op.',
         parameters: [{ name: 'key', description: 'the record to remove.' }],
+      },
+    ],
+  },
+  {
+    key: 'deviceAuth',
+    summary: 'Abstract durable device-authentication service.',
+    description: 'Abstract durable device-authentication service.',
+    methods: [
+      {
+        signature: 'abstract enroll(principal: Omit<VerifiedDevicePrincipal, \'id\'>, label: string): Promise<DeviceAuthIssueResult>',
+        description: 'Enroll a new device under an identity already verified by the caller.',
+        parameters: [{ name: 'principal', description: 'Verified enrollment identity.' }, { name: 'label', description: 'Human device label.' }],
+        returns: 'newly issued permanent token and browser session.',
+      },
+      {
+        signature: 'abstract login(deviceToken: string): Promise<DeviceLoginResult>',
+        description: 'Exchange a permanent recovery credential for a fresh browser session.',
+        parameters: [{ name: 'deviceToken', description: 'Permanent recovery credential.' }],
+        returns: 'a fresh browser session replacing any active session.',
+      },
+      {
+        signature: 'abstract authenticate( deviceId: DeviceId, sessionId: DeviceSessionId, secret: string, options: DeviceAuthenticateOptions, ): Promise<DeviceAuthentication>',
+        description: 'Authenticate one active browser session and optionally apply rolling renewal when due.',
+        parameters: [{ name: 'deviceId', description: 'Owning device id.' }, { name: 'sessionId', description: 'Browser session id.' }, { name: 'secret', description: 'Browser session secret.' }, { name: 'options', description: 'Explicit carrier renewal policy.' }],
+        returns: 'authentication and rolling-renewal decision.',
+      },
+      {
+        signature: 'abstract logout(deviceId: DeviceId, sessionId: DeviceSessionId, secret: string): Promise<void>',
+        description: 'Durably remove an authenticated browser session.',
+        parameters: [{ name: 'deviceId', description: 'Owning device id.' }, { name: 'sessionId', description: 'Browser session id.' }, { name: 'secret', description: 'Browser session secret.' }],
+        returns: 'after durable invalidation.',
+      },
+      {
+        signature: 'abstract listDevices(): readonly DeviceView[]',
+        description: 'List the durable device registry without credential material.',
+        parameters: [],
+        returns: 'every device as a secret-free projection.',
+      },
+      {
+        signature: 'abstract revokeDevice(deviceId: DeviceId): Promise<void>',
+        description: 'Revoke a device credential and its active browser session.',
+        parameters: [{ name: 'deviceId', description: 'Device to revoke.' }],
+        returns: 'after durable revocation.',
+      },
+      {
+        signature: 'abstract rotateDeviceToken(deviceId: DeviceId): Promise<DeviceTokenRotationResult>',
+        description: 'Replace a device\'s permanent credential and remove its active browser session.',
+        parameters: [{ name: 'deviceId', description: 'Device whose permanent token is replaced.' }],
+        returns: 'the secret-free device view and newly issued one-time-visible token.',
       },
     ],
   },
@@ -2274,6 +2421,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the disposer releasing the seat.',
       },
       {
+        signature: 'registerIngressGate(gate: WebIngressGate): () => void',
+        description: 'Register the single application-wide ingress owner. A second owner throws because all HTTP and upgrade dispatch must pass through one policy result. The caller must attach the returned disposer to its Cordis effect.',
+        parameters: [{ name: 'gate', description: 'Handles both HTTP and upgrade carriers before route lookup.' }],
+        returns: 'the disposer releasing the ingress seat.',
+      },
+      {
         signature: 'tapIndex(transform: (html: string) => string): () => void',
         description: 'Register a raw-HTML index transform, the escape hatch for markup no IndexInjection row expresses: renderIndex applies taps in registration order after rendering the structured rows.',
         parameters: [{ name: 'transform', description: 'pure html-to-html function.' }],
@@ -2564,6 +2717,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Committed change to a provider-managed credential source: a `set`, an `unset`, or an external edit observed in storage.',
     description: 'Committed change to a provider-managed credential source: a `set`, an `unset`, or an external edit observed in storage. Ambient process-environment changes are not observable and never emit. Listener failures are contained and logged — a sync throw and an async rejection alike — without changing the committed operation\'s outcome, except `INVARIANT`-coded failures, which rethrow after every listener ran; that rethrow reaches the emitter only from synchronous listeners, so invariant checks on this event must not be async functions.',
     parameters: [{ name: 'ref', description: 'the reference whose stored value changed.' }],
+  },
+  {
+    name: 'device-auth/session-invalidated',
+    mode: 'emit',
+    signature: '\'device-auth/session-invalidated\'(deviceId: DeviceId, sessionId: DeviceSessionId): void',
+    summary: 'A durably removed or replaced active browser session.',
+    description: 'A durably removed or replaced active browser session.',
+    parameters: [{ name: 'deviceId', description: 'Owning device.' }, { name: 'sessionId', description: 'Session that can no longer authenticate.' }],
   },
   {
     name: 'domain/changed',
@@ -3114,6 +3275,110 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
   },
   {
+    name: 'ConsoleAccess',
+    declaration: 'export interface ConsoleAccess {\n    readonly consoleId: ConsoleId;\n    readonly capability: ConsoleCapability;\n}',
+  },
+  {
+    name: 'ConsoleCapability',
+    declaration: 'export type ConsoleCapability = Branded<\'ConsoleCapability\'>;',
+  },
+  {
+    name: 'ConsoleId',
+    declaration: 'export type ConsoleId = Branded<\'ConsoleId\'>;',
+  },
+  {
+    name: 'ConsoleOpenResult',
+    declaration: 'export interface ConsoleOpenResult {\n    readonly access: ConsoleAccess;\n    readonly console: ConsoleSnapshot;\n}',
+  },
+  {
+    name: 'ConsoleOutputObservation',
+    declaration: 'export interface ConsoleOutputObservation {\n    readonly console: ConsoleSnapshot;\n    readonly output: ConsoleOutputRead;\n}',
+  },
+  {
+    name: 'ConsoleOutputRead',
+    declaration: 'export type ConsoleOutputRead = {\n    readonly kind: \'data\';\n    readonly data: Uint8Array;\n    readonly fromByte: number;\n    readonly nextByte: number;\n    readonly availableThroughByte: number;\n} | {\n    readonly kind: \'gap\';\n    readonly oldestByte: number;\n    readonly nextByte: number;\n};',
+  },
+  {
+    name: 'ConsoleRemoteAccess',
+    declaration: 'export interface ConsoleRemoteAccess {\n    readonly consoleId: string;\n    readonly capability: string;\n}',
+  },
+  {
+    name: 'ConsoleRemoteAccessRequest',
+    declaration: 'export interface ConsoleRemoteAccessRequest {\n    readonly access: ConsoleRemoteAccess;\n}',
+  },
+  {
+    name: 'ConsoleRemoteErrorCode',
+    declaration: 'export type ConsoleRemoteErrorCode = \'ACCESS_DENIED\' | \'UNKNOWN_WORKSPACE\' | \'WORKSPACE_UNAVAILABLE\' | \'CONSOLE_CLOSING\' | \'CONSOLE_EXITED\' | \'SERVICE_DISPOSING\' | \'INVALID_CURSOR\' | \'OUTPUT_WAITER_LIMIT\';',
+  },
+  {
+    name: 'ConsoleRemoteFailure',
+    declaration: 'export interface ConsoleRemoteFailure {\n    readonly code: ConsoleRemoteErrorCode | \'INVALID_SIZE\' | \'INVALID_WAIT_MS\' | \'WRITE_TOO_LARGE\';\n}',
+  },
+  {
+    name: 'ConsoleRemoteObservation',
+    declaration: 'export interface ConsoleRemoteObservation {\n    readonly console: ConsoleRemoteSnapshot;\n    readonly output: ConsoleRemoteOutput;\n    readonly timedOut: boolean;\n}',
+  },
+  {
+    name: 'ConsoleRemoteOutput',
+    declaration: 'export type ConsoleRemoteOutput = {\n    readonly kind: \'data\';\n    readonly dataBase64: string;\n    readonly fromByte: number;\n    readonly nextByte: number;\n    readonly availableThroughByte: number;\n} | {\n    readonly kind: \'gap\';\n    readonly oldestByte: number;\n    readonly nextByte: number;\n};',
+  },
+  {
+    name: 'ConsoleRemoteReadRequest',
+    declaration: 'export interface ConsoleRemoteReadRequest {\n    readonly access: ConsoleRemoteAccess;\n    readonly fromByte: number;\n    readonly waitMs: number;\n}',
+  },
+  {
+    name: 'ConsoleRemoteResizeRequest',
+    declaration: 'export interface ConsoleRemoteResizeRequest {\n    readonly access: ConsoleRemoteAccess;\n    readonly size: ConsoleRemoteSize;\n}',
+  },
+  {
+    name: 'ConsoleRemoteResult',
+    declaration: 'export type ConsoleRemoteResult<T> = {\n    readonly ok: true;\n    readonly value: T;\n} | {\n    readonly ok: false;\n    readonly error: ConsoleRemoteFailure;\n};',
+  },
+  {
+    name: 'ConsoleRemoteSignal',
+    declaration: 'export type ConsoleRemoteSignal = \'SIGINT\' | \'SIGTERM\' | \'SIGKILL\' | \'SIGTSTP\' | \'SIGHUP\';',
+  },
+  {
+    name: 'ConsoleRemoteSignalRequest',
+    declaration: 'export interface ConsoleRemoteSignalRequest {\n    readonly access: ConsoleRemoteAccess;\n    readonly signal: ConsoleRemoteSignal;\n}',
+  },
+  {
+    name: 'ConsoleRemoteSize',
+    declaration: 'export interface ConsoleRemoteSize {\n    readonly rows: number;\n    readonly cols: number;\n}',
+  },
+  {
+    name: 'ConsoleRemoteSnapshot',
+    declaration: 'export interface ConsoleRemoteSnapshot {\n    readonly id: string;\n    readonly workspaceId: string;\n    readonly cwd: string;\n    readonly size: ConsoleRemoteSize;\n    readonly status: ConsoleRemoteStatus;\n    readonly oldestOutputByte: number;\n    readonly nextOutputByte: number;\n}',
+  },
+  {
+    name: 'ConsoleRemoteStatus',
+    declaration: 'export type ConsoleRemoteStatus = {\n    readonly kind: \'running\';\n} | {\n    readonly kind: \'exited\';\n    readonly exitCode: number | null;\n    readonly signal: string | null;\n} | {\n    readonly kind: \'failed\';\n};',
+  },
+  {
+    name: 'ConsoleRemoteWriteRequest',
+    declaration: 'export interface ConsoleRemoteWriteRequest {\n    readonly access: ConsoleRemoteAccess;\n    readonly data: string;\n}',
+  },
+  {
+    name: 'ConsoleSignal',
+    declaration: 'export type ConsoleSignal = \'SIGINT\' | \'SIGTERM\' | \'SIGKILL\' | \'SIGTSTP\' | \'SIGHUP\';',
+  },
+  {
+    name: 'ConsoleSignalResult',
+    declaration: 'export interface ConsoleSignalResult {\n    readonly delivered: true;\n    readonly targetPgid: number;\n}',
+  },
+  {
+    name: 'ConsoleSize',
+    declaration: 'export interface ConsoleSize {\n    readonly rows: number;\n    readonly cols: number;\n}',
+  },
+  {
+    name: 'ConsoleSnapshot',
+    declaration: 'export interface ConsoleSnapshot {\n    readonly id: ConsoleId;\n    readonly workspaceId: WorkspaceId;\n    readonly cwd: string;\n    readonly pid: number;\n    readonly size: ConsoleSize;\n    readonly status: ConsoleStatus;\n    readonly oldestOutputByte: number;\n    readonly nextOutputByte: number;\n}',
+  },
+  {
+    name: 'ConsoleStatus',
+    declaration: 'export type ConsoleStatus = {\n    readonly kind: \'running\';\n} | {\n    readonly kind: \'exited\';\n    readonly exitCode: number | null;\n    readonly signal: NodeJS.Signals | null;\n} | {\n    readonly kind: \'failed\';\n    readonly message: string;\n};',
+  },
+  {
     name: 'ContentBlockMap',
     declaration: 'export interface ContentBlockMap {\n    \'text\': TextBlock;\n    \'reasoning\': ReasoningBlock;\n    \'image\': ImageBlock;\n    \'tool-call\': ToolCallBlock;\n    \'tool-result\': ToolResultBlock;\n}',
   },
@@ -3224,6 +3489,46 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CredentialRef',
     declaration: 'export type CredentialRef = Branded<\'CredentialRef\'>;',
+  },
+  {
+    name: 'DeviceAuthenticateOptions',
+    declaration: 'export interface DeviceAuthenticateOptions {\n    readonly renew: boolean;\n}',
+  },
+  {
+    name: 'DeviceAuthentication',
+    declaration: 'export interface DeviceAuthentication {\n    readonly device: DeviceView;\n    readonly renewSession: boolean;\n    readonly expiresAt: number;\n}',
+  },
+  {
+    name: 'DeviceAuthIssueResult',
+    declaration: 'export interface DeviceAuthIssueResult {\n    readonly device: DeviceView;\n    readonly deviceToken: string;\n    readonly session: DeviceSessionCredential;\n}',
+  },
+  {
+    name: 'DeviceId',
+    declaration: 'export type DeviceId = Branded<\'DeviceId\'>;',
+  },
+  {
+    name: 'DeviceLoginResult',
+    declaration: 'export interface DeviceLoginResult {\n    readonly device: DeviceView;\n    readonly session: DeviceSessionCredential;\n}',
+  },
+  {
+    name: 'DevicePrincipalId',
+    declaration: 'export type DevicePrincipalId = Branded<\'DevicePrincipalId\'>;',
+  },
+  {
+    name: 'DeviceSessionCredential',
+    declaration: 'export interface DeviceSessionCredential {\n    readonly deviceId: DeviceId;\n    readonly id: DeviceSessionId;\n    readonly secret: string;\n    readonly expiresAt: number;\n}',
+  },
+  {
+    name: 'DeviceSessionId',
+    declaration: 'export type DeviceSessionId = Branded<\'DeviceSessionId\'>;',
+  },
+  {
+    name: 'DeviceTokenRotationResult',
+    declaration: 'export interface DeviceTokenRotationResult {\n    readonly device: DeviceView;\n    readonly deviceToken: string;\n}',
+  },
+  {
+    name: 'DeviceView',
+    declaration: 'export interface DeviceView {\n    readonly id: DeviceId;\n    readonly principal: VerifiedDevicePrincipal;\n    readonly label: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly revokedAt?: number;\n    readonly session?: {\n        readonly id: DeviceSessionId;\n        readonly expiresAt: number;\n    };\n}',
   },
   {
     name: 'DiffCallView',
@@ -3444,6 +3749,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GrantRecord',
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
+  },
+  {
+    name: 'HumanShellOpenRequest',
+    declaration: 'export interface HumanShellOpenRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly size: ConsoleSize;\n}',
   },
   {
     name: 'ImageAttachmentLimits',
@@ -4575,15 +4884,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubprocessTerminalHandle',
-    declaration: 'export interface SubprocessTerminalHandle {\n    readonly pid: number;\n    readonly output: Readable;\n    readonly done: Promise<SubprocessOutcome>;\n    write(data: string): Promise<void>;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signalForeground(signal: SubprocessTerminalSignal): Promise<number>;\n    terminate(): Promise<void>;\n}',
+    declaration: 'export interface SubprocessTerminalHandle {\n    readonly pid: number;\n    readonly output: Readable;\n    readonly done: Promise<SubprocessOutcome>;\n    write(data: string): Promise<void>;\n    resize(size: SubprocessTerminalSize): Promise<void>;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signalForeground(signal: SubprocessTerminalSignal): Promise<number>;\n    terminate(): Promise<void>;\n}',
   },
   {
     name: 'SubprocessTerminalSignal',
     declaration: 'export type SubprocessTerminalSignal = \'SIGINT\' | \'SIGTERM\' | \'SIGKILL\' | \'SIGTSTP\' | \'SIGHUP\';',
   },
   {
+    name: 'SubprocessTerminalSize',
+    declaration: 'export interface SubprocessTerminalSize {\n    readonly rows: number;\n    readonly cols: number;\n}',
+  },
+  {
     name: 'SubprocessTerminalSpawnSpec',
-    declaration: 'export interface SubprocessTerminalSpawnSpec {\n    argv: readonly string[];\n    cwd: string;\n    env?: Record<string, string> | undefined;\n    rows: number;\n    cols: number;\n    graceMs: number;\n    signal?: AbortSignal | undefined;\n}',
+    declaration: 'export interface SubprocessTerminalSpawnSpec {\n    argv: readonly string[];\n    cwd: string;\n    term: string;\n    env?: Record<string, string> | undefined;\n    rows: number;\n    cols: number;\n    graceMs: number;\n    signal?: AbortSignal | undefined;\n}',
   },
   {
     name: 'SurfaceEvent',
@@ -4938,6 +5251,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
   },
   {
+    name: 'VerifiedDevicePrincipal',
+    declaration: 'export interface VerifiedDevicePrincipal {\n    readonly id: DevicePrincipalId;\n    readonly issuer: string;\n    readonly subject: string;\n    readonly email: string;\n}',
+  },
+  {
     name: 'WebBootEntry',
     declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n}',
   },
@@ -4964,6 +5281,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WebFetchResultView',
     declaration: 'export interface WebFetchResultView {\n    card: \'web\';\n    kind: \'fetch\';\n    title?: string;\n    url: string;\n    statusCode: number;\n    truncated: boolean;\n}',
+  },
+  {
+    name: 'WebIngressDecision',
+    declaration: 'export type WebIngressDecision = {\n    kind: \'allow\';\n} | {\n    kind: \'handled\';\n};',
+  },
+  {
+    name: 'WebIngressGate',
+    declaration: 'export interface WebIngressGate {\n    handleHttp(req: IncomingMessage, res: ServerResponse): WebIngressDecision | Promise<WebIngressDecision>;\n    handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): WebIngressDecision | Promise<WebIngressDecision>;\n}',
   },
   {
     name: 'WebResultView',
