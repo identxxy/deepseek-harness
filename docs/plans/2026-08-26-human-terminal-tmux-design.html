@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH Human Terminal / tmux 设计报告</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #eef3f8;
+      --text: #17202a;
+      --muted: #5d6b78;
+      --line: #d9e1e8;
+      --accent: #116466;
+      --accent-soft: #dceeed;
+      --danger: #a83232;
+      --code: #10212b;
+      --code-text: #eaf7f4;
+      --shadow: 0 16px 40px rgba(32, 48, 64, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d141a;
+        --panel: #131d24;
+        --panel-soft: #192731;
+        --text: #e7eef3;
+        --muted: #9babb7;
+        --line: #293b47;
+        --accent: #6fd3cd;
+        --accent-soft: #183b3c;
+        --danger: #ff8e8e;
+        --code: #081015;
+        --code-text: #ddf7f4;
+        --shadow: 0 18px 44px rgba(0, 0, 0, 0.25);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 40px 0 80px; }
+    header {
+      padding: 38px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(145deg, var(--panel), var(--accent-soft));
+      box-shadow: var(--shadow);
+    }
+    h1 { margin: 0 0 12px; font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1.08; letter-spacing: -0.045em; }
+    h2 { margin: 0 0 18px; font-size: 1.45rem; letter-spacing: -0.02em; }
+    h3 { margin: 26px 0 10px; font-size: 1.05rem; }
+    p { margin: 10px 0; }
+    a { color: var(--accent); }
+    .eyebrow { color: var(--accent); font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+    .lede { max-width: 830px; margin-top: 18px; color: var(--muted); font-size: 1.08rem; }
+    .status { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+    .chip { padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 78%, transparent); font-size: 0.88rem; }
+    .toc, section { margin-top: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); box-shadow: var(--shadow); }
+    .toc { padding: 22px 28px; }
+    .toc ol { columns: 2; padding-left: 22px; }
+    section { padding: 30px; scroll-margin-top: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-soft); }
+    .card h3 { margin-top: 0; }
+    .decision { border-left: 4px solid var(--accent); }
+    .warning { border-left: 4px solid var(--danger); }
+    pre {
+      overflow-x: auto;
+      margin: 18px 0;
+      padding: 20px;
+      border-radius: 14px;
+      background: var(--code);
+      color: var(--code-text);
+      font: 0.92rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    :not(pre) > code { padding: 0.12em 0.38em; border-radius: 5px; background: var(--panel-soft); }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.86rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 7px; }
+    .flow { counter-reset: flow; display: grid; gap: 12px; margin-top: 16px; }
+    .flow > div { position: relative; padding: 14px 16px 14px 52px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-soft); }
+    .flow > div::before { counter-increment: flow; content: counter(flow); position: absolute; left: 14px; top: 13px; width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--bg); font-weight: 800; }
+    .small { color: var(--muted); font-size: 0.9rem; }
+    footer { padding: 28px 4px 0; color: var(--muted); }
+    @media (max-width: 720px) {
+      main { width: min(100% - 20px, 1120px); padding-top: 10px; }
+      header, section { padding: 22px; border-radius: 14px; }
+      .grid { grid-template-columns: 1fr; }
+      .toc ol { columns: 1; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Approved product design · 2026-08-26</div>
+    <h1>DSH Human Terminal<br>tmux-backed Actor</h1>
+    <p class="lede">把 Human Terminal 做成与模型 Agent 并列的一等产品 Actor：远程通过 DSH Web 操作，本地通过 Kitty 直接 attach，同一个 tmux session 是两端共同的真实终端。</p>
+    <div class="status">
+      <span class="chip">一 Console ↔ 一 tmux session</span>
+      <span class="chip">Web + Kitty 同时 attach</span>
+      <span class="chip">Desktop splits</span>
+      <span class="chip">Mobile single focus</span>
+      <span class="chip">No model / no agent loop</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="目录">
+    <strong>目录</strong>
+    <ol>
+      <li><a href="#outcome">目标与非目标</a></li>
+      <li><a href="#architecture">系统架构</a></li>
+      <li><a href="#identity">身份与状态</a></li>
+      <li><a href="#tmux">tmux provider</a></li>
+      <li><a href="#flows">核心数据流</a></li>
+      <li><a href="#ui">Web、手机与 Kitty UX</a></li>
+      <li><a href="#security">安全与故障</a></li>
+      <li><a href="#packages">包与接口影响</a></li>
+      <li><a href="#verification">验收与验证</a></li>
+      <li><a href="#decisions">已确认决策</a></li>
+    </ol>
+  </nav>
+
+  <section id="outcome">
+    <h2>1. 目标与非目标</h2>
+    <div class="grid">
+      <div class="card decision">
+        <h3>目标</h3>
+        <ul>
+          <li>用户可在 DSH 中显式创建一个没有 model 参与的 Human Terminal。</li>
+          <li>Human Terminal 与 DSH Agent 出现在同一套 Workspace 导航中。</li>
+          <li>一个 Terminal 可以同时从 Web、手机和 Kitty 访问。</li>
+          <li>浏览器断线和 DSH Host 重启不会终止 shell workload。</li>
+          <li>桌面端允许 Agent conversation 与 Terminal 多 pane split，手机端保持单 focus。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>第一版非目标</h3>
+        <ul>
+          <li>不把 Human Terminal 注册成 core <code>Agent</code>。</li>
+          <li>不把 Terminal byte 写入 Agent Session log。</li>
+          <li>不导入用户默认 tmux server 中已有的 session。</li>
+          <li>不解析 Codex 或 Claude TUI 为结构化 DSH conversation。</li>
+          <li>不自动调用 Kitty remote control；只提供稳定 attach 命令。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <h2>2. 系统架构</h2>
+    <pre aria-label="架构图">Unified Workspace UI
+├── Model Agent Actor
+│   └── Session → Agent Loop → LLM
+└── Human Terminal Actor
+    └── Console → console-tmux → dedicated tmux server
+                                └── tmux session
+                                    ├── Web attachment A
+                                    ├── Web attachment B
+                                    └── Kitty native attachment</pre>
+    <p>“Actor”是产品层的统一导航概念，不替换 core <code>Agent</code> 接口。Model Agent 与 Human Terminal 共享 Workspace、标题、打开、归档和 pane 布局，但各自保留独立 runtime、状态和 renderer。</p>
+    <p>现有 model-facing Terminal 继续由确切的 live Agent 持有。Human Terminal 走 Host-owned Console 能力，因此不会削弱 <code>ctx.terminals</code> 的 exact-owner、controlled prompt、exclusive send 或 tool result 语义。</p>
+  </section>
+
+  <section id="identity">
+    <h2>3. 身份与状态</h2>
+    <table>
+      <thead><tr><th>实体</th><th>生命周期</th><th>真源</th><th>授权</th></tr></thead>
+      <tbody>
+        <tr><td><code>ConsoleId</code></td><td>跨 Host 重启</td><td>DSH-owned tmux metadata</td><td>设备身份保护发现与创建</td></tr>
+        <tr><td>tmux session</td><td>直到显式 terminate 或外部 kill</td><td>专属 tmux server</td><td>Unix 用户 socket 权限</td></tr>
+        <tr><td><code>ConsoleAttachmentId</code></td><td>一次 Web attachment</td><td>DSH Host 内存</td><td>进程内 bearer capability</td></tr>
+        <tr><td>Pane layout</td><td>当前 Client device</td><td>浏览器本地状态</td><td>不跨设备共享</td></tr>
+      </tbody>
+    </table>
+    <h3>Console 状态</h3>
+    <pre>running ──archive──▶ archived ──restore──▶ running
+   │                    │
+   ├──external kill─────┴──────────────▶ ended
+   └──confirmed terminate──────────────▶ terminated</pre>
+    <p>关闭 pane 与 attachment detach 不改变 Console 状态。Archive 只改变产品可见性。Terminate 是唯一由 DSH 主动执行 <code>tmux kill-session</code> 的操作。</p>
+  </section>
+
+  <section id="tmux">
+    <h2>4. tmux provider</h2>
+    <div class="grid">
+      <div class="card decision">
+        <h3>专属 server</h3>
+        <p>Provider 使用配置的 server name，例如 <code>tmux -L dsh</code>。它不读取或修改用户默认 tmux server，从而使 ownership、发现和终止范围明确。</p>
+      </div>
+      <div class="card">
+        <h3>一对一映射</h3>
+        <p>每个 Console 对应一个 tmux session。用户仍可在该 session 内创建任意 window 和 pane，但 DSH 的归档与终止不会影响其他 Console。</p>
+      </div>
+      <div class="card">
+        <h3>恢复</h3>
+        <p>DSH Host 启动时扫描专属 server 中具有完整 DSH user options 的 session，恢复稳定 Console identity。缺失或损坏 metadata 的 session 不会被接管或删除。</p>
+      </div>
+      <div class="card">
+        <h3>Attachment</h3>
+        <p>每个 Web viewer 启动一个独立 <code>tmux attach-session</code> PTY。tmux 为新 Client 绘制当前完整屏幕，因此重连不依赖 raw byte replay。</p>
+      </div>
+    </div>
+    <h3>明确配置</h3>
+    <p>tmux executable、server name、shell、window-size policy、attachment idle TTL、输出窗口、最大 Console 数量和每 Console 最大 Web attachment 数量都由 Cordis plugin config 提供，不作为隐藏常量。</p>
+  </section>
+
+  <section id="flows">
+    <h2>5. 核心数据流</h2>
+    <h3>创建 Human Terminal</h3>
+    <div class="flow">
+      <div>Client 选择 <code>New → Human Terminal</code> 与一个已注册 Workspace。</div>
+      <div>Host 分配 <code>ConsoleId</code> 与 DSH-generated tmux session name。</div>
+      <div>Provider 在 Workspace path 创建 detached tmux session，并写入非敏感 metadata。</div>
+      <div>Provider 读回 metadata；只有验证完整后才把 Console 发布到列表。</div>
+      <div>Client 打开 Console，并用当前 xterm rows/cols 创建临时 attachment。</div>
+    </div>
+    <h3>打开与重连</h3>
+    <div class="flow">
+      <div>Client 请求 <code>attach(ConsoleId, rows, cols)</code>。</div>
+      <div>Host 签发 attachment identity 与 capability，启动独立 tmux Client PTY。</div>
+      <div>tmux 输出当前完整终端屏幕；xterm 随后接收增量 byte。</div>
+      <div>刷新、换设备或 attachment 过期后创建新 attachment；旧 Client detach，workload 保持运行。</div>
+    </div>
+    <h3>归档与终止</h3>
+    <p>Archive 写入 tmux metadata 后才从活动 Sidebar 隐藏。Restore 反向更新 metadata。Terminate 需要确认，并且只在 <code>tmux kill-session</code> 成功后从 catalog 删除；所有 attachment 通过 tmux Client exit 观察到终止。</p>
+  </section>
+
+  <section id="ui">
+    <h2>6. Web、手机与 Kitty UX</h2>
+    <h3>Desktop pane canvas</h3>
+    <pre>split horizontal
+├── DSH Agent conversation
+└── split vertical
+    ├── Human Terminal
+    └── another Agent</pre>
+    <ul>
+      <li>每个 pane 显示一个可寻址 Actor，header 标出标题、Workspace、类型和状态。</li>
+      <li>支持 Split Right、Split Down 和可拖动 divider。</li>
+      <li>点击 Sidebar Actor 默认替换 active pane；显式 “Open in New Split” 创建相邻 pane。</li>
+      <li>关闭 pane 只关闭视图；不 Archive，也不 Terminate。</li>
+      <li>layout 保存在当前浏览器设备，不写入 Host。</li>
+    </ul>
+    <h3>统一 Sidebar 与 New 菜单</h3>
+    <pre>New
+├── DSH Agent
+└── Human Terminal</pre>
+    <p>Workspace 下同时显示 Agent 与 Human Terminal。Terminal row 提供 Open、Open in New Split、Rename、Archive、Copy Attach Command 和带确认的 Terminate。</p>
+    <h3>Mobile</h3>
+    <p>手机沿用两级导航：统一 Actor 列表进入一个全屏 Actor，Browser Back 返回列表。手机不显示 split control。Terminal 提供 Esc、Tab、Ctrl、方向键和中断辅助键栏。</p>
+    <h3>Kitty</h3>
+    <pre>dsh console attach &lt;console-id&gt;</pre>
+    <p>该命令在普通 Kitty split 中执行后，以原生 tmux Client 替换当前进程。Web、手机与 Kitty 是同一个 tmux session 的不同 Client，看到并操作相同的 shell 与程序。<code>Ctrl-b d</code> 只 detach。命令检测已有 tmux Client，并拒绝静默创建 nested tmux。</p>
+  </section>
+
+  <section id="security">
+    <h2>7. 安全与故障</h2>
+    <div class="card warning">
+      <h3>Human Terminal 是 remote code execution</h3>
+      <p>所有远程发现、创建和 attachment 操作必须经过现有 device-auth ingress。每个 attachment 还使用独立 capability；知道 Console ID 本身不授予 attachment I/O 权限。</p>
+    </div>
+    <ul>
+      <li>Provider 通过 argv 调用 tmux，不拼接 shell command。</li>
+      <li>专属 tmux server 在 scrubbed environment 下启动；Web 与 CLI attach 禁止 tmux environment update。</li>
+      <li>tmux metadata 不保存 capability、device credential、token 或 key。</li>
+      <li>Attachment capability 只存在于 Host 与 Client 内存；Host 重启后旧 capability 失效。</li>
+      <li>Terminal output 不进入 Session log、telemetry 或 connection-wide broadcast。</li>
+      <li>创建失败会 rollback 本次未发布的 tmux session；不会删除已存在的 session。</li>
+      <li>外部 kill 显示为 “Terminal ended externally”；DSH 不猜测恢复一个已经不存在的 workload。</li>
+      <li>tmux 缺失或版本不满足要求时 provider 在加载期失败；没有 provider 的部署不显示 Human Terminal 入口。</li>
+    </ul>
+    <p>tmux 原生允许多个 Client 同时输入。产品不声称存在 Kitty 可以绕过的独占 controller。默认共享尺寸策略采用显式配置的 <code>largest</code>，避免手机 attachment 缩小大屏 Kitty；该策略的几何取舍在 UI 中保持可见。</p>
+  </section>
+
+  <section id="packages">
+    <h2>8. 包与接口影响</h2>
+    <table>
+      <thead><tr><th>包或区域</th><th>职责</th></tr></thead>
+      <tbody>
+        <tr><td><code>dsh-console</code></td><td>把现有单 PTY Console 修正为 durable Console workload 与 ephemeral Attachment 两层身份、授权和生命周期接口。</td></tr>
+        <tr><td><code>dsh-console-tmux</code></td><td>新增 provider：专属 tmux server、metadata、恢复扫描、创建、archive、terminate 与 Web attachment。</td></tr>
+        <tr><td><code>dsh-console-remote</code></td><td>扩展 list/create/attach/archive/restore/terminate 与 attachment I/O RPC。</td></tr>
+        <tr><td>Client Console runtime</td><td>维护 Console catalog、attachment object、重连、错误投影和 capability 生命周期。</td></tr>
+        <tr><td><code>dsh-ui-console</code></td><td>xterm renderer、pane header、手机辅助键和 Terminal actions。</td></tr>
+        <tr><td><code>ui-workspace</code> / layout</td><td>统一 Actor list、active pane、split tree、device-local layout 和 mobile focus。</td></tr>
+        <tr><td>CLI consumer</td><td>实现 <code>dsh console list</code> 与 <code>dsh console attach</code>，执行本机 tmux attachment。</td></tr>
+        <tr><td>Web bundle / deployment overlay</td><td>组合 tmux provider、remote consumer、Client runtime 与 UI plugin；不支持 tmux 的平台不装载 provider。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>9. 验收与验证</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Provider</h3>
+        <ul>
+          <li>安全 argv 与 metadata parsing</li>
+          <li>idempotent create 与 rollback</li>
+          <li>archive、restore、terminate</li>
+          <li>真实 tmux create/detach/reattach</li>
+          <li>Host restart recovery</li>
+          <li>credential environment scrub</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Remote 与 Client</h3>
+        <ul>
+          <li>foreign/stale capability 拒绝</li>
+          <li>attachment TTL cleanup</li>
+          <li>并发 Web attachment</li>
+          <li>外部 kill 与 Host disconnect</li>
+          <li>有界 output 与 cancellation</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>GUI</h3>
+        <ul>
+          <li>New 类型菜单与统一 Sidebar</li>
+          <li>Agent + Terminal splits</li>
+          <li>输入、resize、detach、reopen</li>
+          <li>archive/restore/terminate confirmation</li>
+          <li>Mobile Back 与辅助键</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Regression</h3>
+        <ul>
+          <li>Agent Terminal exact-owner tests 不变</li>
+          <li>Agent conversation 与 Session log 不变</li>
+          <li>普通 tmux sessions 不可见且不受影响</li>
+          <li>keyless product snapshots 与真实 runnable composition</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>10. 已确认决策</h2>
+    <ol>
+      <li>Human Terminal 是产品层一等 Actor，但不是 fake/no-model core Agent。</li>
+      <li>一个 DSH Human Terminal 对应一个独立 tmux session。</li>
+      <li>全部 Human Terminal 使用 DSH 专属 tmux server 管理。</li>
+      <li>第一版只管理 DSH 创建的 tmux sessions，不导入现有 sessions。</li>
+      <li>关闭或归档不 kill；显式确认 Terminate 才 kill tmux session。</li>
+      <li>同一 Console 可以同时被 Web、手机与 Kitty attach。</li>
+      <li>桌面端支持 split tree，手机端只 focus 一个 Actor。</li>
+      <li>第一版允许用户在 Human shell 内手动运行 Codex/Claude；专用启动模板后续独立增加。</li>
+    </ol>
+    <p class="small">决策依据记录在 <a href="../../.agents/notes/proposed/feature/2026-08-26-tmux-human-terminal-actors.md">tmux-backed Human Terminal actors Agent Note</a>。被取代的单 PTY 方案保留为 rejected guardrail。</p>
+  </section>
+
+  <footer>
+    <p>DeepSeek Harness · Human Terminal / tmux approved design · 2026-08-26</p>
+  </footer>
+</main>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Agent Note: Host 持有的 Console 会话
 
-Status: proposed
+Status: rejected — 已由 tmux-backed Human Terminal Actor 提案取代。
 
 [English](2026-08-25-host-owned-console-sessions.md) | 中文
 
