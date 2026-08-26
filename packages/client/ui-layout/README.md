@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package provides the shell layout of the Web GUI: a three-column AppFrame with resizable sidebar and details panels, a concession chain that shrinks the details column and then auto-closes it when space runs out, and the `ctx.layout` panel-geometry service other plugins call to open or close the details column. It also seats the theme presenter, which projects the resolved color scheme, alias tokens, content font size, and `theme-color` metadata onto the document. Choose it for the standard window chrome; panel geometry is transient and resets on reload.
+This package provides the shell layout of the Web GUI: a three-column AppFrame with resizable sidebar and details panels, a concession chain that shrinks the details column and then auto-closes it when space runs out, and the `ctx.layout` panel-geometry service other plugins call to open or close the details column. Below 1024px the frame becomes two-level single-pane navigation: one full-width destination renders at a time (Session list or conversation), entering a conversation pushes a same-URL browser History entry so browser back and the platform edge-swipe return to the Session list before leaving DSH, and the inactive destination stays mounted at zero width. It also seats the theme presenter, which projects the resolved color scheme, alias tokens, content font size, and `theme-color` metadata onto the document. Choose it for the standard window chrome; panel geometry is transient and resets on reload.
 
 ## Table of Contents
 
@@ -76,6 +76,8 @@ These limits define the current layout behavior. They are current package constr
 - **Panel geometry is transient** — reload restores the sidebar default and details closed; switching between distinct Session ids also closes details and forgets its dragged width, while unselected surfaces render details at zero width without modifying geometry.
 - **Concession-chain auto-close derives a zero width without touching the preferred width** — the panel restores itself when the window widens; consumers must not read the stored details width as the rendered truth.
 - **No scroll anchoring during squeeze reflow** — layout changes may move the reader's viewport.
+
+- **Mobile History does not encode a Session id in the URL** — reloading restores the runtime's selected Session and uses History only for list/conversation navigation.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -39,6 +39,13 @@ async function createRuntime(): Promise<SlotTestRuntime> {
   const directoryPicker = {}
   Object.assign(new TestRemote(runtime.ctx), { directoryPicker })
   runtime.ctx.provide('remote.directoryPicker', directoryPicker as never)
+  runtime.ctx.provide('layout', {
+    toggleSidebar: vi.fn(),
+    showSessionList: vi.fn(),
+    showConversation: vi.fn(),
+    openDetails: vi.fn(),
+    closeDetails: vi.fn(),
+  } as never)
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)

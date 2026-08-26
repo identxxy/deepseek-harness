@@ -48,6 +48,11 @@
   border-left: none;
 }
 
+/* A zero-width mobile destination must not leave its one-pixel desktop seam. */
+.frame[data-mobile-view='conversation'] .sidebarCol {
+  border-right: none;
+}
+
 /* Drag handles are frame children (columns clip overflow): an 8px hit strip
    centered on the column border via inline left, above column content. Details
    adds a visible 12x32 pill at vertical center; sidebar keeps only the hit strip. */

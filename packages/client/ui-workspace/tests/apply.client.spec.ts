@@ -28,6 +28,7 @@ async function bench() {
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
   const subscribe = () => () => {}
+  const layout = { showConversation: vi.fn() }
   ctx.provide('workspaces', {
     list: {
       getSnapshot: () => ({
@@ -62,6 +63,7 @@ async function bench() {
   const directoryPicker = { pick: pickDirectory }
   Object.assign(new TestRemote(ctx), { directoryPicker })
   ctx.provide('remote.directoryPicker', directoryPicker as never)
+  ctx.provide('layout', layout as never)
   const locale = new LocaleRuntime(ctx)
   // These specs assert the shipped Chinese copy. There is no jsdom `window`
   // in this lane, so browser-language detection never runs and the locale
@@ -70,7 +72,7 @@ async function bench() {
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
-    insertSessionBefore, open, clear, search, renameSession, binding, fork, pickDirectory,
+    insertSessionBefore, open, clear, search, renameSession, binding, fork, pickDirectory, layout,
   }
 }
 
@@ -85,7 +87,7 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
     expect(inject).toEqual([
-      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker',
+      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout',
     ])
   })
 
@@ -121,6 +123,7 @@ describe('ui-workspace apply', () => {
     expect(startSession).toHaveBeenLastCalledWith(undefined)
     browser.open('session' as never)
     expect(b.open).toHaveBeenCalledWith('session')
+    expect(b.layout.showConversation).toHaveBeenCalledTimes(1)
     const signal = new AbortController().signal
     await expect(browser.searchSessions('match', signal)).resolves.toEqual({
       items: [{ sessionId: 'session', snippet: 'match' }],
@@ -135,6 +138,7 @@ describe('ui-workspace apply', () => {
     await vi.waitFor(() => {
       expect(b.open).toHaveBeenCalledWith('forked')
     })
+    expect(b.layout.showConversation).toHaveBeenCalledTimes(2)
     expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true })
     await browser.renameWorkspace('ws' as never, 'renamed')
     expect(b.rename).toHaveBeenCalledWith('ws', 'renamed')

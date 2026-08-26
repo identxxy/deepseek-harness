@@ -24,6 +24,7 @@ import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/settings-chrome', import.meta.url))
 const DIALOG_EXPECTED = join(SNAPSHOT_DIR, 'dialog.expected.md')
 const PLUGINS_EXPECTED = join(SNAPSHOT_DIR, 'plugins.expected.md')
+const MOBILE_EXPECTED = join(SNAPSHOT_DIR, 'mobile-navigation.expected.md')
 // The English fallback surface: a browser naming no shipped language.
 const DIALOG_EN_EXPECTED = join(SNAPSHOT_DIR, 'dialog-en.expected.md')
 const PLUGIN_ROW_SELECTOR = '[data-plugin-entry$="ui-settings"]'
@@ -140,6 +141,56 @@ describe('web e2e: settings modal and General preferences', () => {
     await expect.poll(() => page.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('uses phone Back to return from one Settings page to the section list', async () => {
+    const mobilePage = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      locale: ZH_BROWSER_LOCALE,
+    })
+    const mobileTripwire = watchConsole(mobilePage)
+    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-mobile-settings-navigation'))
+    try {
+      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await mobilePage.getByRole('button', { name: '设置', exact: true }).click()
+      const dialog = mobilePage.getByRole('dialog', { name: '设置' })
+      await expect.poll(() => dialog.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('sections')
+
+      const columns = () => dialog.evaluate(node => [...node.children]
+        .map(child => Math.round(child.getBoundingClientRect().width)))
+      await expect.poll(columns, { timeout: 5_000 }).toEqual([390, 0])
+      const listGeometry = `view=sections; columns=${(await columns()).join('/')}; viewport=${await mobilePage.evaluate(() => window.innerWidth)}`
+      const listAria = await captureStableAria(
+        mobilePage,
+        '[role="dialog"] > nav',
+        scaffold.workspaceCwd,
+      )
+
+      await dialog.getByRole('button', { name: '模型' }).click()
+      await expect.poll(() => dialog.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('content')
+      await expect.poll(columns, { timeout: 5_000 }).toEqual([0, 390])
+      const contentGeometry = `view=content; columns=${(await columns()).join('/')}; viewport=${await mobilePage.evaluate(() => window.innerWidth)}`
+
+      await mobilePage.goBack()
+      await expect.poll(() => dialog.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('sections')
+      await expect.poll(columns, { timeout: 5_000 }).toEqual([390, 0])
+      expect(await dialog.getByRole('button', { name: '通用设置' }).count()).toBe(1)
+
+      await mobilePage.goForward()
+      await expect.poll(() => dialog.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('content')
+      await expect.poll(columns, { timeout: 5_000 }).toEqual([0, 390])
+      await dialog.getByRole('heading', { name: '模型', exact: true }).waitFor({ timeout: 10_000 })
+
+      await compareOrRefreshGolden(
+        MOBILE_EXPECTED,
+        [listGeometry, listAria, contentGeometry].join('\n'),
+        MODE,
+      )
+      expect(mobileTripwire.pageErrors).toEqual([])
+    } finally {
+      await mobilePage.close()
+    }
+  }, 90_000)
 
   it('stores Permission as the default for future sessions without changing an existing session', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-permission'))

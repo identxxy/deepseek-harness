@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-client-ui-settings-general` is the settings shell of the dsh web client: the Settings panel opens from the sidebar's bottom control, a connection-failure indicator beside that control offers immediate recovery, the navigation is built from the sections features contribute, and first-run users are walked through one onboarding step at a time. It also registers everything on the Settings pages that belongs to no single feature: the trigger/header/close chrome content, the local configuration-file action, the General section and its `settings.general.item` slot, and the `settings` dictionaries. Feature-owned rows (Permission, Language, Appearance), sections (Models), and conditional onboarding steps stay with their feature packages; the shell itself ships no onboarding copy of its own.
 
+
+Below 640px, the Settings panel fills the viewport and uses two History-backed levels: opening shows the complete section list, selecting a section gives its mounted content the full width, and browser Back returns to the list while Forward restores the section. Settings entries preserve unrelated History fields, including the mobile Session destination, and closing unwinds only the entries owned by the open panel. At wider viewports the panel retains its simultaneous navigation and content columns.
 ## Table of Contents
 
 - [Use this package](#use-this-package)
@@ -37,7 +39,7 @@ On a loopback browser, the shell renders **Open configuration file** only when t
 
 ### Onboarding steps
 
-The onboarding ledger projects in ascending order and mounts exactly one step at a time. Registrants own durable completion, capability readiness, copy, mutations, and their visible wrapper, so independently registered flows cannot stack and the shell does not become a second configuration fact source. Visible steps own their dialog chrome and app-root `inert` lifecycle.
+The onboarding ledger projects in ascending order and mounts exactly one step at a time; a mounted step still resolving private facts renders null, so nothing paints or blocks while it decides. Registrants own durable completion, capability readiness, copy, mutations, and their visible wrapper, so independently registered flows cannot stack and the shell does not become a second configuration fact source. Visible steps own their dialog chrome and app-root `inert` lifecycle; the active registrant receives its id, `complete()`, and an `openSection(id)` callback, and completing or skipping transfers ownership to the next entry.
 
 -----
 

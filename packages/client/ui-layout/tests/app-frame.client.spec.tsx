@@ -134,6 +134,7 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => setTimeout(() => { cb(0) }, 16) as unknown as number)
   vi.stubGlobal('cancelAnimationFrame', (h: number) => { clearTimeout(h) })
   window.innerWidth = frameWidth
+  window.history.replaceState(null, '', '/')
   Element.prototype.getBoundingClientRect = function () {
     return { width: frameWidth, height: 1080, top: 0, left: 0, right: frameWidth, bottom: 1080, x: 0, y: 0, toJSON: () => ({}) }
   }
@@ -147,6 +148,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   document.title = ''
+  window.history.replaceState(null, '', '/')
   vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
@@ -322,44 +324,62 @@ describe('AppFrame', () => {
   })
 })
 
-describe('AppFrame — narrow-viewport auto-collapse', () => {
-  it('mounts collapsed below the breakpoint with no sidebar handle', () => {
+describe('AppFrame — single-pane mobile navigation', () => {
+  it('starts in the selected conversation with the sidebar fully hidden', () => {
     frameWidth = 980
     const { frame, slotCalls } = mountFrame()
-    expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.dataset.mobileView).toBe('conversation')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
-    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: 0 })
+    expect(window.history.state).toMatchObject({ __dshMobileView: 'conversation' })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
   })
 
-  it('narrow toggle re-expands over the squeezed center and back', () => {
+  it('starts at the full-width Session list when no Session is selected', () => {
     frameWidth = 980
-    const { frame, instance } = mountFrame()
-    act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)).toEqual([280, 0])
+    selectedSession.current = undefined
+    const { frame, slotCalls } = mountFrame()
+    expect(tracks(frame)).toEqual([980, 0])
+    expect(frame.dataset.mobileView).toBe('sessions')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
-    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
-    act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: false, width: 980 })
+    expect(window.history.state).toMatchObject({ __dshMobileView: 'sessions' })
   })
 
-  it('a wide-closed preference re-expands at the contract default while narrow', () => {
-    frameWidth = 1920
-    const { frame, instance } = mountFrame()
-    act(() => { instance.actions.toggleSidebar() }) // close while wide: preference 0
+  it('opens a conversation from the list and restores the list on popstate', () => {
     frameWidth = 980
-    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
-    act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)).toEqual([280, 0])
-    expect(instance.getSnapshot().sidebar).toBe(0) // preference untouched
+    window.history.replaceState({ __dshMobileView: 'sessions' }, '', '/')
+    const { frame, instance } = mountFrame()
+    expect(tracks(frame)).toEqual([980, 0])
+
+    act(() => { instance.actions.showConversation() })
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(window.history.state).toMatchObject({ __dshMobileView: 'conversation' })
+
+    act(() => {
+      window.history.replaceState({ __dshMobileView: 'sessions' }, '', '/')
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state as unknown }))
+    })
+    expect(tracks(frame)).toEqual([980, 0])
+    expect(frame.dataset.mobileView).toBe('sessions')
   })
 
-  it('shrinking across the breakpoint auto-collapses; re-widening restores the drag width', () => {
+  it('requests browser back when an in-app action returns from conversation to the list', () => {
+    frameWidth = 980
+    const { frame, instance } = mountFrame()
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {})
+    act(() => { instance.actions.showSessionList() })
+    expect(tracks(frame)).toEqual([980, 0])
+    expect(back).toHaveBeenCalledOnce()
+  })
+
+  it('restores desktop panel geometry after crossing the breakpoint twice', () => {
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.setSidebar(400) })
     frameWidth = 980
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
-    expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
+    expect(tracks(frame)).toEqual([0, 0])
     frameWidth = 1920
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([400, 0])

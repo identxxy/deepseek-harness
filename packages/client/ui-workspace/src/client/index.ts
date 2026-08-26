@@ -22,6 +22,8 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the Session root standard-hook merge.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+// Type-only: pulls the layout plugin's Context merge (ctx.layout).
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
 import { UiWorkspaceService } from './navigation.ts'
 import { createWorkspaceViewStore } from './stores.ts'
@@ -60,7 +62,7 @@ const NS = 'workspace'
  * declaration through `slots.inject()` instead of assuming order.
  */
 export const inject = [
-  'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker',
+  'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout',
 ]
 
 /**
@@ -99,7 +101,10 @@ export function apply(ctx: Context): void {
     // Explicit group actions keep their target; unscoped New Session inherits
     // the current Session Workspace before the recent-Workspace fallback.
     startSession: (workspaceId) => { uiWorkspace.startSession(workspaceId) },
-    open: (sessionId) => { sessions.open(sessionId) },
+    open: (sessionId) => {
+      sessions.open(sessionId)
+      ctx.layout.showConversation()
+    },
     searchSessions,
     searchResultLimit: sessions.searchResultLimit,
     renameSession: async (sessionId, title) => {
@@ -112,7 +117,10 @@ export function apply(ctx: Context): void {
     },
     forkSession: (sessionId) => {
       sessions.fork({ sessionId, increaseTitle: true })
-        .then((childId) => { sessions.open(childId) })
+        .then((childId) => {
+          sessions.open(childId)
+          ctx.layout.showConversation()
+        })
         .catch(() => {
           // Fork or child-rename failure keeps the current selection.
         })

@@ -126,6 +126,9 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       this.sessions.clear()
       return
     }
+    // Single-pane navigation enters the conversation level as the New Session
+    // flow starts; the desktop renderer ignores this pane state.
+    this.ctx.layout.showConversation()
     void this.connectWorkspace(target).then(
       (sessionId) => { this.sessions.open(sessionId) },
       (reason: unknown) => { console.warn('new session failed:', reason) },

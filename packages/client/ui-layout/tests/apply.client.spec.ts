@@ -52,13 +52,16 @@ describe('ui-layout client apply', () => {
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     const actions = {
-      setSidebar: vi.fn(), setDetails: vi.fn(), toggleSidebar: vi.fn(), openDetails: vi.fn(), closeDetails: vi.fn(),
+      setSidebar: vi.fn(), setDetails: vi.fn(), toggleSidebar: vi.fn(), setSinglePane: vi.fn(),
+      showSessionList: vi.fn(), showConversation: vi.fn(), openDetails: vi.fn(), closeDetails: vi.fn(),
     }
     const injected = (slots.entries('root')[0]!.inject as (actions: never) => object)(actions as never)
     expect(injected).toEqual({})
     const layout = ctx.get('layout') as LayoutController
     layout.toggleSidebar()
     expect(actions.toggleSidebar).toHaveBeenCalledOnce()
+    layout.showConversation()
+    expect(actions.showConversation).toHaveBeenCalledOnce()
   })
 
   it('theme presenter applies the initial snapshot, follows theme/change, and unwinds on dispose', async () => {
