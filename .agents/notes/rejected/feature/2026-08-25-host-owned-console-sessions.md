@@ -1,6 +1,6 @@
 # Agent Note: Host-owned Console sessions
 
-Status: proposed
+Status: rejected — Superseded by the tmux-backed Human Terminal Actor proposal.
 
 English | [中文](2026-08-25-host-owned-console-sessions.zh.md)
 
