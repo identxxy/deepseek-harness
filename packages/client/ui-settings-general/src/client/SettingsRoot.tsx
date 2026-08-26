@@ -1,6 +1,7 @@
 /**
- * Settings shell root: the sidebar-foot trigger row plus the centered modal
- * panel (figma 501:29947, 1080x700) with the section nav rail. The shell is
+ * Settings shell root: the sidebar-foot trigger row plus the modal panel
+ * (figma 501:29947, 1080x700) with the section nav rail. Phone widths use
+ * History-backed list and content levels; wider widths show both. The shell is
  * a pure composition face — every piece of text (trigger label, panel title,
  * close label, sections) arrives from registrants through slots; accessible
  * names resolve to that content (trigger: its own text; dialog:
@@ -35,35 +36,135 @@ type PanelProps = {
   onClose: () => void
 }
 
+const PHONE_MEDIA_QUERY = '(max-width: 639px)'
+const SETTINGS_HISTORY_KEY = '__dshSettingsView'
+
+type MobileSettingsView = 'sections' | 'content'
+
+function readSettingsHistoryView(state: unknown): MobileSettingsView | undefined {
+  if (typeof state !== 'object' || state === null) return undefined
+  const value = (state as Record<string, unknown>)[SETTINGS_HISTORY_KEY]
+  return value === 'sections' || value === 'content' ? value : undefined
+}
+
+function settingsHistoryState(view: MobileSettingsView): Record<string, unknown> {
+  const current = window.history.state as unknown
+  const base = typeof current === 'object' && current !== null
+    ? current as Record<string, unknown>
+    : {}
+  return { ...base, [SETTINGS_HISTORY_KEY]: view }
+}
+
+function usePhoneLayout(): boolean {
+  // Non-browser component tests do not provide the browser media-query API.
+  const [phone, setPhone] = useState(() => (
+    typeof matchMedia === 'undefined' ? false : matchMedia(PHONE_MEDIA_QUERY).matches
+  ))
+
+  useEffect(() => {
+    if (typeof matchMedia === 'undefined') return
+    const media = matchMedia(PHONE_MEDIA_QUERY)
+    const update = () => { setPhone(media.matches) }
+    media.addEventListener('change', update)
+    update()
+    return () => { media.removeEventListener('change', update) }
+  }, [])
+
+  return phone
+}
+
 /**
- * The modal layer: full-viewport mask + centered panel. Close paths: the
- * header button, a mask click, and document-level Escape (mounted only while
- * open, so the listener lifetime is the panel's).
+ * The modal layer: full-viewport mask plus responsive panel. Close paths are
+ * the header button, a mask click, and document-level Escape. The listener
+ * lifetime matches the open panel.
  */
 function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
   const titleId = useId()
+  const phone = usePhoneLayout()
+  const [mobileView, setMobileView] = useState<MobileSettingsView>(
+    activeId === undefined ? 'sections' : 'content',
+  )
+  const historyInitialized = useRef(false)
+
+  useEffect(() => {
+    if (!phone) {
+      historyInitialized.current = false
+      return
+    }
+    if (historyInitialized.current) return
+    historyInitialized.current = true
+    window.history.pushState(settingsHistoryState('sections'), document.title)
+    if (mobileView === 'content') {
+      window.history.pushState(settingsHistoryState('content'), document.title)
+    }
+  }, [mobileView, phone])
+
+  useEffect(() => {
+    if (!phone) return
+    const onPopState = (event: PopStateEvent): void => {
+      const view = readSettingsHistoryView(event.state)
+      if (view === undefined) onClose()
+      else setMobileView(view)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => { window.removeEventListener('popstate', onPopState) }
+  }, [onClose, phone])
+
+  const selectSection = useCallback((id: string) => {
+    onSelect(id)
+    if (!phone) return
+    setMobileView('content')
+    window.history.pushState(settingsHistoryState('content'), document.title)
+  }, [onSelect, phone])
+
+  const closePanel = useCallback(() => {
+    if (phone) window.history.go(mobileView === 'content' ? -2 : -1)
+    onClose()
+  }, [mobileView, onClose, phone])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') closePanel()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => { document.removeEventListener('keydown', onKeyDown) }
-  }, [onClose])
+  }, [closePanel])
 
-  // Baseline focus management: entering the dialog lands on the close button.
+  // Focus follows the visible close control when phone History changes panes.
   const closeButton = useRef<HTMLButtonElement | null>(null)
-  useEffect(() => { closeButton.current?.focus() }, [])
+  useEffect(() => { closeButton.current?.focus() }, [mobileView])
 
   return (
     <div className={css.overlay} role="presentation">
-      <div className={css.mask} aria-hidden="true" onClick={onClose} />
-      <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <nav className={css.nav}>
-          <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
+      <div className={css.mask} aria-hidden="true" onClick={closePanel} />
+      <div
+        className={css.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        data-mobile-view={phone ? mobileView : undefined}
+      >
+        <nav
+          className={css.nav}
+          aria-hidden={phone && mobileView !== 'sections' ? true : undefined}
+        >
+          <div className={css.navHeader}>
+            <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
+            {phone && (
+              <button
+                ref={mobileView === 'sections' ? closeButton : undefined}
+                type="button"
+                className={css.close}
+                onClick={closePanel}
+              >
+                <IconCloseOutline16 size={14} />
+                <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
+              </button>
+            )}
+          </div>
           <div className={css.navList}>
             {rows.map(row => (
               <button
@@ -71,7 +172,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
                 type="button"
                 className={clsx(css.navCell, row.id === active && css.active)}
                 aria-current={row.id === active ? 'true' : undefined}
-                onClick={() => { onSelect(row.id) }}
+                onClick={() => { selectSection(row.id) }}
               >
                 {navIcon(row.id)}
                 <span className={css.navLabel}>{row.label}</span>
@@ -79,10 +180,18 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
             ))}
           </div>
         </nav>
-        <div className={css.content}>
+        <div
+          className={css.content}
+          aria-hidden={phone && mobileView !== 'content' ? true : undefined}
+        >
           <div className={css.header}>
             <div className={css.actions}>{renderSlot('settings.action', {})}</div>
-            <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
+            <button
+              ref={!phone || mobileView === 'content' ? closeButton : undefined}
+              type="button"
+              className={css.close}
+              onClick={closePanel}
+            >
               <IconCloseOutline16 size={14} />
               <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
             </button>

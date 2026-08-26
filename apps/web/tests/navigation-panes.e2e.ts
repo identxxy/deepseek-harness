@@ -26,6 +26,7 @@ const SEED = join(SNAPSHOT_DIR, 'seed.jsonl')
 const TRAJECTORY_EXPECTED = join(SNAPSHOT_DIR, 'trajectory.expected.md')
 const SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-results.expected.md')
 const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
+const MOBILE_EXPECTED = join(SNAPSHOT_DIR, 'mobile-session-navigation.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
 
@@ -513,10 +514,63 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('NAVIGATION_OK')
   }, 60_000)
 
+  it.skipIf(MODE === 'record')('uses browser back to return from a mobile conversation to the Session list', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-mobile-session-navigation'))
+    await page.setViewportSize({ width: 390, height: 844 })
+    const frame = page.locator('[style*="grid-template-columns"]').first()
+    await expect.poll(() => frame.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('sessions')
+
+    const searchButton = page.getByRole('button', { name: 'Search sessions' })
+    if (await searchButton.getAttribute('aria-expanded') !== 'true') await searchButton.click()
+    const search = page.getByPlaceholder('Search sessions', { exact: false })
+    await search.fill('WATERFALL')
+    const result = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
+    await expect.poll(() => result.count(), { timeout: 30_000 }).toBe(1)
+
+    const listGeometry = await frame.evaluate((node) => {
+      const columns = [...node.children].slice(0, 3).map(child => Math.round(child.getBoundingClientRect().width))
+      return `view=sessions; columns=${columns.join('/')}; viewport=${window.innerWidth}`
+    })
+    const listAria = await captureStableAria(page, '[role="tree"][aria-label="Search results"]', scaffold.workspaceCwd)
+    await result.click()
+    await expect.poll(() => frame.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('conversation')
+    await page.getByRole('heading', { name: 'Navigation Summary' }).waitFor({ timeout: 15_000 })
+    await expect.poll(
+      () => frame.evaluate(node => [...node.children].slice(0, 3).map(child => Math.round(child.getBoundingClientRect().width))),
+      { timeout: 5_000 },
+    ).toEqual([0, 390, 0])
+    const conversationGeometry = await frame.evaluate((node) => {
+      const columns = [...node.children].slice(0, 3).map(child => Math.round(child.getBoundingClientRect().width))
+      return `view=conversation; columns=${columns.join('/')}; viewport=${window.innerWidth}`
+    })
+
+    await page.goBack()
+    await expect.poll(() => frame.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('sessions')
+    await expect.poll(
+      () => frame.evaluate(node => [...node.children].slice(0, 3).map(child => Math.round(child.getBoundingClientRect().width))),
+      { timeout: 5_000 },
+    ).toEqual([390, 0, 0])
+    expect(await page.getByRole('tree', { name: 'Search results' }).count()).toBe(1)
+
+    await page.goForward()
+    await expect.poll(() => frame.getAttribute('data-mobile-view'), { timeout: 10_000 }).toBe('conversation')
+    await expect.poll(
+      () => frame.evaluate(node => [...node.children].slice(0, 3).map(child => Math.round(child.getBoundingClientRect().width))),
+      { timeout: 5_000 },
+    ).toEqual([0, 390, 0])
+    await page.getByRole('heading', { name: 'Navigation Summary' }).waitFor({ timeout: 15_000 })
+
+    await compareOrRefreshGolden(
+      MOBILE_EXPECTED,
+      [listGeometry, listAria, conversationGeometry].join('\n'),
+      MODE,
+    )
+  }, 90_000)
+
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'seed.jsonl', 'search-results.expected.md', 'trajectory.expected.md',
-      'terminal-card.expected.md',
+      'mobile-session-navigation.expected.md', 'seed.jsonl', 'search-results.expected.md',
+      'trajectory.expected.md', 'terminal-card.expected.md',
     ])
   })
 })

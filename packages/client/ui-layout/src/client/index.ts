@@ -9,7 +9,7 @@
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
-import type { PanelActions } from './service.ts'
+import type { LayoutActions } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
 import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
@@ -130,8 +130,8 @@ export function apply(ctx: ClientContext): void {
       store: createLayoutStore,
       // The hook's only side effect connects the root store to ctx.layout;
       // conversation business actions belong to their registrants.
-      inject: (actions: PanelActions) => {
-        layout.attachPanels(actions)
+      inject: (actions: LayoutActions) => {
+        layout.attachActions(actions)
         return {}
       },
     }, AppFrame)

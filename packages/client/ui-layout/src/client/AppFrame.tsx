@@ -13,7 +13,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import { computeColumns, MOBILE_NAV_BREAKPOINT } from './columns.ts'
+import { readMobileHistoryView, useMobileHistory } from './mobile-history.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -91,6 +92,7 @@ export function AppFrame({
   renderSlot,
 }: AppFrameProps) {
   const panels = useStore(s => s)
+  const currentSession = useSessions(s => s.current)
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
@@ -127,19 +129,29 @@ export function AppFrame({
     }
   }, [])
 
-  // Narrow viewports auto-collapse the sidebar; the store mirror keeps
-  // toggleSidebar's semantics right (narrow toggles flip the manual
-  // re-expand override, stores.ts). Collapsed is decided here, so the
-  // solver stays breakpoint-free: a narrow re-expand passes the preference
-  // (or the default when the wide preference is closed) and the center
-  // absorbs the squeeze.
-  const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
-  useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
-  const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
-  const sidebarPreference = sidebarCollapsed
-    ? 0
-    : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
-  const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
+  // Below the mobile breakpoint the shell becomes a two-level, single-pane
+  // navigation. Both subtrees stay mounted; zero-width tracks preserve their
+  // local state while clipping the inactive destination.
+  const singlePane = viewport < MOBILE_NAV_BREAKPOINT
+  useEffect(() => { actions.setSinglePane(singlePane) }, [actions, singlePane])
+  const mobileView = panels.mobileView === 'auto'
+    ? readMobileHistoryView(window.history.state) ?? (currentSession === undefined ? 'sessions' : 'conversation')
+    : panels.mobileView
+  useMobileHistory(singlePane, mobileView, actions)
+
+  const desktopCols = computeColumns(
+    viewport,
+    panels.sidebar,
+    detailsSession === undefined ? 0 : panels.details,
+  )
+  const cols = singlePane
+    ? {
+      sidebar: mobileView === 'sessions' ? viewport : 0,
+      center: mobileView === 'conversation' ? viewport : 0,
+      details: 0,
+    }
+    : desktopCols
+  const sidebarCollapsed = singlePane ? mobileView === 'conversation' : panels.sidebar === 0
   const colsRef = useRef(cols)
   colsRef.current = cols
 
@@ -168,14 +180,13 @@ export function AppFrame({
       style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={cols.details === 0 || undefined}
+      data-mobile-view={singlePane ? mobileView : undefined}
       data-dragging={dragging || undefined}
     >
       <div className={css.sidebarCol}>
-        {/* Render-site slot call with live concession output: a closed
-            sidebar keeps the mounted slot at the compact-rail width, and the
-            component sees its rendered state as owner params decided here
-            (collapsed follows the resolved rail, so a derived auto-collapse
-            renders the rail UI too). */}
+        {/* Render-site slot call with live layout output. Desktop close keeps
+            the compact rail; single-pane conversation navigation clips the
+            mounted sidebar at zero width. */}
         {renderSlot('sidebar', {
           collapsed: sidebarCollapsed,
           width: cols.sidebar,
@@ -194,8 +205,8 @@ export function AppFrame({
         {renderSlot('shell.overlay', {})}
       </div>
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
+      {!singlePane && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {!singlePane && cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
     </div>
   )
 }

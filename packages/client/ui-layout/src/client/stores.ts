@@ -1,6 +1,6 @@
 /**
  * The root entry's transient layout store: panel geometry as plain widths in
- * px (0 = closed). Module level exports the factory only — a module-level
+ * px (0 = closed) plus responsive navigation state. Module level exports the factory only — a module-level
  * handle would pin the store's identity in the module
  * cache (a de-facto singleton surviving plugin reloads). register() receives
  * the factory (exclusive use: the framework instantiates per entry), AppFrame
@@ -14,13 +14,17 @@ import {
 } from './columns.ts'
 
 /**
- * Layout store state: panel width preferences in px (0 = closed), plus the
- * narrow-viewport pair — `narrow` mirrors AppFrame's breakpoint reading
- * (viewport < SIDEBAR_AUTO_COLLAPSE) so toggleSidebar can pick semantics, and
- * `narrowExpanded` is the manual override that re-expands the auto-collapsed
- * sidebar over the squeezed center without rewriting the width preference.
+ * Layout store state: desktop panel width preferences in px (0 = closed),
+ * plus the single-pane flag and its current mobile destination. `auto` lets
+ * AppFrame derive the initial destination from browser History and Session
+ * selection without persisting either fact in this transient store.
  */
-type LayoutState = { sidebar: number; details: number; narrow: boolean; narrowExpanded: boolean }
+type LayoutState = {
+  sidebar: number
+  details: number
+  singlePane: boolean
+  mobileView: 'auto' | 'sessions' | 'conversation'
+}
 
 /**
  * Annotation twin of the actions literal below (the export needs a declared
@@ -30,7 +34,9 @@ type LayoutActions = {
   setSidebar: (draft: LayoutState, px: number) => void
   setDetails: (draft: LayoutState, px: number) => void
   toggleSidebar: (draft: LayoutState) => void
-  setNarrow: (draft: LayoutState, narrow: boolean) => void
+  setSinglePane: (draft: LayoutState, singlePane: boolean) => void
+  showSessionList: (draft: LayoutState) => void
+  showConversation: (draft: LayoutState) => void
   openDetails: (draft: LayoutState) => void
   closeDetails: (draft: LayoutState) => void
 }
@@ -40,30 +46,28 @@ type LayoutActions = {
  * closing a panel forgets its drag width — reopening restores the contract
  * default. Actions are the complete write set: drag writes clamp
  * into the panel's contract range and never cross the open/closed line;
- * open/close transitions write 0 / the default explicitly. Below the
- * auto-collapse breakpoint (AppFrame feeds setNarrow) the sidebar toggle
- * flips the narrowExpanded override instead of the preference.
+ * open/close transitions write 0 / the default explicitly. In single-pane
+ * mode the sidebar toggle moves between the Session list and conversation;
+ * desktop width preferences remain untouched.
  * @returns the store handle (spec + type + identity + factory in one).
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false }),
+    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, singlePane: false, mobileView: 'auto' }),
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
-      // Narrow toggles flip only the override: the width preference survives
-      // untouched, so re-widening restores the pre-squeeze layout.
       toggleSidebar: (d) => {
-        if (d.narrow) d.narrowExpanded = !d.narrowExpanded
+        if (d.singlePane) d.mobileView = d.mobileView === 'conversation' ? 'sessions' : 'conversation'
         else d.sidebar = d.sidebar === 0 ? SIDEBAR_DEFAULT : 0
       },
-      // Crossing the breakpoint in either direction drops the override: the
-      // narrow default is auto-collapsed, the wide state is the preference.
-      setNarrow: (d, narrow: boolean) => {
-        if (d.narrow === narrow) return
-        d.narrow = narrow
-        d.narrowExpanded = false
+      setSinglePane: (d, singlePane: boolean) => {
+        if (d.singlePane === singlePane) return
+        d.singlePane = singlePane
+        d.mobileView = 'auto'
       },
+      showSessionList: (d) => { d.mobileView = 'sessions' },
+      showConversation: (d) => { d.mobileView = 'conversation' },
       openDetails: (d) => { if (d.details === 0) d.details = DETAILS_DEFAULT },
       closeDetails: (d) => { d.details = 0 },
     },

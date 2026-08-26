@@ -17,9 +17,14 @@ const PERSIST_KEY = 'dsh.layout.panels'
 beforeEach(() => { localStorage.clear() })
 
 describe('createLayoutStore', () => {
-  it('initializes the sidebar at its default width, details closed, wide viewport assumed', () => {
+  it('initializes desktop geometry and leaves the mobile destination automatic', () => {
     const { store } = createLayoutStore().create()
-    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: SIDEBAR_DEFAULT,
+      details: 0,
+      singlePane: false,
+      mobileView: 'auto',
+    })
   })
 
   it('each create() is an independent instance (factory is not a singleton)', () => {
@@ -50,28 +55,36 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().sidebar).toBe(SIDEBAR_DEFAULT)
   })
 
-  it('narrow toggleSidebar flips only the re-expand override; the width preference survives', () => {
+  it('single-pane navigation actions preserve the desktop width preference', () => {
     const { store, actions } = createLayoutStore().create()
     actions.setSidebar(400)
-    actions.setNarrow(true)
+    actions.setSinglePane(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: 400,
+      details: 0,
+      singlePane: true,
+      mobileView: 'conversation',
+    })
     actions.toggleSidebar()
-    expect(store.getSnapshot().narrowExpanded).toBe(false)
+    expect(store.getSnapshot().mobileView).toBe('sessions')
+    actions.showConversation()
+    expect(store.getSnapshot().mobileView).toBe('conversation')
+    actions.showSessionList()
+    expect(store.getSnapshot().mobileView).toBe('sessions')
     expect(store.getSnapshot().sidebar).toBe(400)
   })
 
-  it('crossing the breakpoint drops the override; a same-value setNarrow keeps it', () => {
+  it('crossing the breakpoint resets the destination while a same-value write keeps it', () => {
     const { store, actions } = createLayoutStore().create()
-    actions.setNarrow(true)
-    actions.toggleSidebar()
-    expect(store.getSnapshot().narrowExpanded).toBe(true)
-    actions.setNarrow(true)
-    expect(store.getSnapshot().narrowExpanded).toBe(true)
-    actions.setNarrow(false)
-    expect(store.getSnapshot()).toMatchObject({ narrow: false, narrowExpanded: false })
-    actions.setNarrow(true)
-    expect(store.getSnapshot().narrowExpanded).toBe(false)
+    actions.setSinglePane(true)
+    actions.showConversation()
+    actions.setSinglePane(true)
+    expect(store.getSnapshot().mobileView).toBe('conversation')
+    actions.setSinglePane(false)
+    expect(store.getSnapshot()).toMatchObject({ singlePane: false, mobileView: 'auto' })
+    actions.setSinglePane(true)
+    expect(store.getSnapshot().mobileView).toBe('auto')
   })
 
   it('openDetails uses the contract default, preserves an open width, and closeDetails zeroes', () => {
@@ -96,8 +109,8 @@ describe('createLayoutStore', () => {
     expect(second.store.getSnapshot()).toEqual({
       sidebar: SIDEBAR_DEFAULT,
       details: 0,
-      narrow: false,
-      narrowExpanded: false,
+      singlePane: false,
+      mobileView: 'auto',
     })
   })
 })

@@ -5,7 +5,11 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  window.history.replaceState(null, '', '/')
+})
 
 type Row = { id: string; order: number; label: string }
 type Step = { id: string; order: number }
@@ -77,6 +81,23 @@ function mount({
 
 function openPanel() {
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+}
+
+function usePhoneViewport() {
+  const listeners = new Set<(event: MediaQueryListEvent) => void>()
+  vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+    matches: query === '(max-width: 639px)',
+    media: query,
+    onchange: null,
+    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      listeners.add(listener)
+    },
+    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      listeners.delete(listener)
+    },
+    dispatchEvent: vi.fn(),
+  }) as unknown as MediaQueryList))
+  return listeners
 }
 
 describe('SettingsRoot trigger', () => {
@@ -162,6 +183,73 @@ describe('SettingsPanel close paths', () => {
 })
 
 describe('SettingsPanel navigation', () => {
+  it('opens a phone-width dialog at the section list', () => {
+    usePhoneViewport()
+    mount()
+    openPanel()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.getAttribute('data-mobile-view')).toBe('sections')
+    expect(dialog.children[0]?.getAttribute('aria-hidden')).toBeNull()
+    expect(dialog.children[1]?.getAttribute('aria-hidden')).toBe('true')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+  })
+
+  it('opens the phone section list as a child of the current browser History entry', () => {
+    usePhoneViewport()
+    window.history.replaceState({ __dshMobileView: 'conversation' }, '', '/')
+    mount()
+    openPanel()
+    expect(window.history.state).toEqual({
+      __dshMobileView: 'conversation',
+      __dshSettingsView: 'sections',
+    })
+  })
+
+  it('enters a full-width phone section as the next browser History entry', () => {
+    usePhoneViewport()
+    window.history.replaceState({ __dshMobileView: 'conversation' }, '', '/')
+    mount()
+    openPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }))
+    expect(screen.getByRole('dialog').getAttribute('data-mobile-view')).toBe('content')
+    expect(window.history.state).toEqual({
+      __dshMobileView: 'conversation',
+      __dshSettingsView: 'content',
+    })
+    expect(screen.getByTestId('section-models')).toBeTruthy()
+  })
+
+  it('maps phone Back and Forward entries between the section list and content', () => {
+    usePhoneViewport()
+    mount()
+    openPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }))
+
+    act(() => {
+      window.history.replaceState({ __dshSettingsView: 'sections' }, '', '/')
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state as unknown }))
+    })
+    expect(screen.getByRole('dialog').getAttribute('data-mobile-view')).toBe('sections')
+
+    act(() => {
+      window.history.replaceState({ __dshSettingsView: 'content' }, '', '/')
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state as unknown }))
+    })
+    expect(screen.getByRole('dialog').getAttribute('data-mobile-view')).toBe('content')
+    expect(screen.getByTestId('section-models')).toBeTruthy()
+  })
+
+  it('closes a phone content page by unwinding both Settings History entries', () => {
+    usePhoneViewport()
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => {})
+    mount()
+    openPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(go).toHaveBeenCalledWith(-2)
+  })
+
   it('projects rows, marks the first active, and renders only that section', () => {
     mount()
     openPanel()
@@ -225,6 +313,18 @@ describe('SettingsPanel navigation', () => {
     const inactive = mount({ onboardingActive: false }).renderSlot.mock.calls
       .filter(call => call[0] === 'settings.onboarding')
     expect(inactive).toHaveLength(0)
+  })
+
+  it('opens an onboarding-requested section as phone content with a list parent', () => {
+    usePhoneViewport()
+    const { renderSlot } = mount()
+    const onboarding = renderSlot.mock.calls.find(call => call[0] === 'settings.onboarding')
+    act(() => {
+      (onboarding?.[1] as { openSection: (id: string) => void }).openSection('models')
+    })
+    expect(screen.getByRole('dialog').getAttribute('data-mobile-view')).toBe('content')
+    expect(screen.getByTestId('section-models')).toBeTruthy()
+    expect(window.history.state).toMatchObject({ __dshSettingsView: 'content' })
   })
 
   it('paints no takeover chrome of its own around the mounted step', () => {
