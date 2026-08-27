@@ -1,0 +1,29 @@
+# Human-readable Cloudflare dashboard values. Cloudflare does not import this file.
+publicHostname:
+  hostname: dsh.example.com
+  service: http://127.0.0.1:3080
+
+accessApplication:
+  type: self-hosted
+  domain: dsh.example.com/auth/device/enroll
+  policy:
+    action: allow
+    includeEmail: user@example.com
+    requireLoginMethod: one-time-pin
+
+edgeRules:
+  httpToHttps:
+    hostname: dsh.example.com
+    preservePath: true
+    preserveQuery: true
+    statusCode: 301
+  responseHeader:
+    hostname: dsh.example.com
+    name: Strict-Transport-Security
+    value: max-age=31536000
+
+deviceAuthInputs:
+  publicOrigin: https://dsh.example.com
+  accessIssuer: https://example.cloudflareaccess.com
+  accessAudience: <ACCESS_APPLICATION_AUD>
+  accessEmail: user@example.com

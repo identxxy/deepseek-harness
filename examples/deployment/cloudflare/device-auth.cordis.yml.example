@@ -1,0 +1,8 @@
+- id: device-auth-web
+  config:
+    publicOrigin: 'https://dsh.example.com'
+    accessIssuer: 'https://example.cloudflareaccess.com'
+    accessAudience: '<ACCESS_APPLICATION_AUD>'
+    accessEmail: 'user@example.com'
+    accessClockToleranceSeconds: 5
+    maxFormBytes: 8192
