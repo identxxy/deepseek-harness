@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH Cloudflare 远程访问文档设计</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f4f7fa; --panel:#fff; --text:#18232d; --muted:#5d6b78; --line:#d7e0e8; --accent:#176b65; --soft:#e5f1ef; --code:#102128; --code-text:#eaf6f4; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0d151a; --panel:#142028; --text:#e7eef2; --muted:#9babb5; --line:#2a3b45; --accent:#75d6ce; --soft:#193436; --code:#081014; --code-text:#dff7f3; } }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,ui-sans-serif,system-ui,sans-serif; line-height:1.65; }
+    main { width:min(980px,calc(100% - 28px)); margin:auto; padding:32px 0 64px; }
+    header, section { margin-top:20px; padding:28px; border:1px solid var(--line); border-radius:18px; background:var(--panel); }
+    header { margin-top:0; background:linear-gradient(145deg,var(--panel),var(--soft)); }
+    h1 { margin:4px 0 12px; font-size:clamp(2rem,5vw,3.5rem); line-height:1.08; letter-spacing:-.04em; }
+    h2 { margin:0 0 14px; font-size:1.35rem; }
+    p { margin:9px 0; }
+    .eyebrow { color:var(--accent); font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+    .lede,.muted { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .card { padding:16px; border:1px solid var(--line); border-radius:12px; background:var(--soft); }
+    .card h3 { margin:0 0 8px; }
+    pre { overflow:auto; padding:18px; border-radius:12px; background:var(--code); color:var(--code-text); font:0.9rem/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    :not(pre)>code { padding:.1em .35em; border-radius:4px; background:var(--soft); }
+    li+li { margin-top:6px; }
+    @media (max-width:680px) { main { padding-top:14px; } header,section { padding:20px; border-radius:13px; } .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Approved design · 2026-08-27</div>
+    <h1>DSH Cloudflare<br>远程访问文档</h1>
+    <p class="lede">把当前安全部署方式整理为公开、可复用、无个人信息的双语教程与静态配置模板。教程解释安全职责；模板只提供占位符，不接触任何真实凭据。</p>
+  </header>
+
+  <section>
+    <h2>目标与非目标</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>目标</h3>
+        <ul>
+          <li>记录 Browser、Cloudflare、Tunnel 与 DSH Host 的请求路径。</li>
+          <li>提供 Cloudflare Tunnel、systemd 与 Cordis 配置模板。</li>
+          <li>说明 enrollment、设备 token、浏览器 session 与本地 bypass。</li>
+          <li>提供可重复的部署验证和回滚步骤。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>非目标</h3>
+        <ul>
+          <li>不提交生产域名、邮箱、账户标识、Tunnel ID 或 token。</li>
+          <li>不实现会修改系统或读取凭据的安装脚本。</li>
+          <li>不把 <code>trusted-host</code> 描述成身份认证。</li>
+          <li>不承诺 MAC 地址绑定；浏览器设备凭据才是设备身份。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>发布结构</h2>
+    <pre>docs/user/guide/remote-access.md
+docs/user/guide/remote-access.zh.md
+docs/user/guide/remote-access.i18n.yaml
+
+examples/deployment/cloudflare/
+├── cloudflare-dashboard.yml.example
+├── cloudflared.service.example
+├── dsh-web.service.example
+└── device-auth.cordis.yml.example</pre>
+    <p>教程进入 VitePress 的 Guide 导航。模板作为源文件保持可复制；教程链接到模板，避免在多处维护完整配置。推荐路径使用 remotely-managed tunnel，因此 dashboard 模板记录控制面输入，而不是提供只适用于 locally-managed tunnel 的 <code>config.yml</code>。</p>
+  </section>
+
+  <section>
+    <h2>安全模型</h2>
+    <pre>Browser HTTPS
+  → Cloudflare edge
+    → Access policy on the exact enrollment path
+      → outbound Cloudflare Tunnel
+        → 127.0.0.1:3080
+          → DSH device-auth for HTTP and WebSocket</pre>
+    <ul>
+      <li>DSH 只监听 loopback；服务器不开放应用端口。</li>
+      <li>Cloudflare Access 只负责首次 enrollment；DSH device token 保护其余应用流量。</li>
+      <li><code>--trusted-host</code> 限制允许的 Host header，用于 DNS rebinding 与误暴露防护，不替代认证。</li>
+      <li>Tunnel token 由主机外部文件保存，权限设为 <code>0600</code>，systemd 仅引用路径。</li>
+      <li>HSTS 和 HTTP→HTTPS 规则按单一 hostname 限定，默认不启用 <code>includeSubDomains</code> 或 preload。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>实施步骤</h2>
+    <ol>
+      <li>写双语教程，覆盖 prerequisites、部署、enrollment、验证、token rotation 与回滚。</li>
+      <li>添加四个只含通用占位符的静态模板。</li>
+      <li>把教程加入 <code>website/docs.ts</code> 的双语发布映射。</li>
+      <li>生成 translation pairing 元数据。</li>
+      <li>运行文档检查、链接检查、格式检查和模板语法检查。</li>
+      <li>扫描新增内容和 pending diff，拒绝个人邮箱、域名、用户名、绝对 home 路径、Cloudflare 标识或 token。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>风险与回滚</h2>
+    <p>主要风险是把部署示例误当成真实安全保证、模板中遗留生产值，以及 Cloudflare Access 与 DSH device-auth 的职责说明不准确。通过占位符检查、隐私扫描和实际认证语义对照降低风险。</p>
+    <p>本次变更只增加文档、模板与网站映射。回滚时删除新增页面和模板，并移除对应 manifest entry，不影响运行时与现有部署。</p>
+  </section>
+</main>
+</body>
+</html>
