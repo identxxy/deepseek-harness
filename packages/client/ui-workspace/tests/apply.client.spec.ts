@@ -27,7 +27,7 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
-  const layout = { showConversation: vi.fn() }
+  const layout = { showConversation: vi.fn(), openActor: vi.fn() }
   ctx.provide('workspaces', {
     create, startSession, rename, insertSessionBefore,
   } as never)
@@ -94,6 +94,7 @@ describe('ui-workspace apply', () => {
     expect(b.layout.showConversation).toHaveBeenCalledTimes(2)
     browser.open('session' as never)
     expect(b.open).toHaveBeenCalledWith('session')
+    expect(b.layout.openActor).toHaveBeenCalledWith({ kind: 'agent', id: 'session' })
     expect(b.layout.showConversation).toHaveBeenCalledTimes(3)
     const signal = new AbortController().signal
     await expect(browser.searchSessions('match', signal)).resolves.toEqual({
@@ -129,6 +130,7 @@ describe('ui-workspace apply', () => {
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     // Registration declared the child holes (declaration = render authorization).
     expect(b.slots.spec('sidebar.workspaces.directoryFlow')).toMatchObject({ kind: 'single' })
+    expect(b.slots.spec('sidebar.workspaces.actor')).toMatchObject({ kind: 'list', scope: 'root' })
     expect(b.slots.spec('conversation.hero.workspace.directoryFlow')).toMatchObject({ kind: 'single' })
 
     const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()

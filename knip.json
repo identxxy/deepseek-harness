@@ -116,7 +116,8 @@
         "tests/**/*.ts"
       ],
       "ignoreDependencies": [
-        "@deepseek-ai/dsh-api-gateway"
+        "@deepseek-ai/dsh-api-gateway",
+        "zod"
       ]
     },
     "packages/client/ui-primitives": {
@@ -209,6 +210,11 @@
       "project": [
         "src/**/*.ts",
         "tests/**/*.ts"
+      ]
+    },
+    "packages/console/console-remote": {
+      "ignoreDependencies": [
+        "zod"
       ]
     },
     "packages/typert/generator": {

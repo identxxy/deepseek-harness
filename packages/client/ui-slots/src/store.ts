@@ -36,14 +36,33 @@ export type BakedActions<T, A extends ActionsDecl<T>> = {
   [K in keyof A]: A[K] extends (draft: T, ...params: infer P) => void ? (...params: P) => void : never
 }
 
+/** Selected store persistence with explicit durable-data validation on restore. */
+export interface StorePersistSpec<T> {
+  /** Browser storage key before an optional scope suffix. */
+  readonly name: string
+  /**
+   * Select the durable subset written after each state change.
+   * @param state - current complete store state.
+   * @returns JSON-serializable durable data.
+   */
+  readonly select: (state: T) => unknown
+  /**
+   * Validate and merge durable data into a fresh initial state.
+   * @param initial - fresh complete state from the store initializer.
+   * @param persisted - parsed but untrusted browser storage data.
+   * @returns restored complete state.
+   */
+  readonly merge: (initial: T, persisted: unknown) => T
+}
+
 /**
  * Store declaration spec: initial-state factory (a lambda so every instance
- * gets a fresh state), optional persistence key (mechanical, framework-run),
+ * gets a fresh state), optional whole-state key or selected persistence,
  * and the actions write set.
  */
 export interface StoreSpec<T, A extends ActionsDecl<T>> {
   init: () => T
-  persist?: string
+  persist?: string | StorePersistSpec<T>
   actions: A
 }
 

@@ -1,3 +1,6 @@
+- text: Agent workspace
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "workspace" [disabled]

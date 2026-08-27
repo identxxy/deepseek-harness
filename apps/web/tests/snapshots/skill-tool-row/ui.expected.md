@@ -1,3 +1,7 @@
+- text: Agent Load the editing-cordis-compositions ski
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Load the editing-cordis-compositions ski" [disabled]

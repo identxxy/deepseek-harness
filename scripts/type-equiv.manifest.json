@@ -1007,7 +1007,7 @@
     },
     {
       "doc": "docs/subsystems/console.md",
-      "symbol": "ConsoleAccess",
+      "symbol": "ConsoleAttachmentAccess",
       "source": "packages/console/console/src/types.ts"
     },
     {

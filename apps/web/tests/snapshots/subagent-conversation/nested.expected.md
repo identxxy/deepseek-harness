@@ -1,3 +1,7 @@
+- text: Agent example editor
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Ask a research subagent to"

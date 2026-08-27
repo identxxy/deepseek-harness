@@ -134,6 +134,8 @@ export function SessionMaybeProvider({ children }: { children: ReactNode }) {
 
 /** SessionProvider API: render-prop body plus the no-session branch. */
 export interface SessionProviderProps {
+  /** Exact Session to bind; omitted follows the runtime's current selection. */
+  sessionId?: string | undefined
   /** No-session body (also covers a current id whose session cannot be resolved). */
   empty?: (() => ReactNode) | undefined
   /** Session body; remounted per session via key={sessionId}. */
@@ -147,9 +149,13 @@ export interface SessionProviderProps {
  * string ids; `PropsRuntime` applies the branded type at the component
  * boundary.
  */
-export function SessionProvider({ empty, children }: SessionProviderProps) {
+export function SessionProvider({ sessionId, empty, children }: SessionProviderProps) {
   const host = useHost()
-  const info = observableHook(host.sessions.provideInfo)(s => s)
+  const currentInfo = observableHook(host.sessions.provideInfo)(s => s)
+  const info = sessionId === undefined
+    ? currentInfo
+    : host.sessions.provideInfoFor(sessionId)
+  if (info === undefined) return <>{empty?.() ?? null}</>
   const id = info.sessionId
   if (id === undefined) return <>{empty?.() ?? null}</>
   return (

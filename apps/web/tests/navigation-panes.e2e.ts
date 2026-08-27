@@ -549,7 +549,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await expect.poll(
       () => frame.evaluate(node => [...node.children].slice(0, 3).map(child => Math.round(child.getBoundingClientRect().width))),
       { timeout: 5_000 },
-    ).toEqual([390, 0, 0])
+    ).toEqual([390, 390, 0])
     expect(await page.getByRole('tree', { name: 'Search results' }).count()).toBe(1)
 
     await page.goForward()

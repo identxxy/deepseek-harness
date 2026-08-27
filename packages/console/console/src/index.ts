@@ -1,18 +1,21 @@
-/** Host-owned console runtime Service Definition. @module @deepseek-ai/dsh-console */
+/** Durable Human Terminal Service Definition. @module @deepseek-ai/dsh-console */
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type {
-  ConsoleAccess, ConsoleErrorCode, ConsoleOpenResult, ConsoleOutputObservation, ConsoleOutputRead, ConsoleSignal,
-  ConsoleSignalResult, ConsoleSize, ConsoleSnapshot, HumanShellOpenRequest,
+  ConsoleAttachRequest, ConsoleAttachmentAccess, ConsoleAttachmentOpenResult, ConsoleAttachmentSnapshot,
+  ConsoleCreateRequest, ConsoleErrorCode, ConsoleId, ConsoleOutputObservation, ConsoleOutputRead,
+  ConsoleSize, ConsoleSnapshot,
 } from './types.ts'
 
+export { ConsoleAttachmentCapability, ConsoleAttachmentId, ConsoleId } from './types.ts'
 export type {
-  ConsoleAccess, ConsoleCapability, ConsoleErrorCode, ConsoleId, ConsoleOpenResult,
-  ConsoleOutputObservation, ConsoleOutputRead, ConsoleSignal, ConsoleSignalResult, ConsoleSize, ConsoleSnapshot,
-  ConsoleStatus, HumanShellOpenRequest,
+  ConsoleAttachRequest, ConsoleAttachmentAccess, ConsoleAttachmentOpenResult, ConsoleAttachmentSnapshot,
+  ConsoleAttachmentStatus, ConsoleCreateRequest, ConsoleErrorCode, ConsoleOutputObservation,
+  ConsoleOutputRead, ConsoleSize, ConsoleSnapshot,
+  ConsoleStatus,
 } from './types.ts'
 
-/** Stable console runtime failure. */
+/** Stable Console runtime failure. */
 export class ConsoleError extends Error {
   /** @param code - Stable machine-readable failure code. @param message - Human-readable diagnostic. */
   constructor(readonly code: ConsoleErrorCode, message: string) {
@@ -25,70 +28,101 @@ declare module '@deepseek-ai/cordis' {
   interface Context { consoles: ConsoleRuntime }
 }
 
-/** Abstract host-owned console runtime. */
+/** Abstract runtime for durable Human Terminals and their ephemeral terminal Clients. */
 export abstract class ConsoleRuntime extends Service {
   constructor(ctx: Context) {
     if (new.target === ConsoleRuntime) {
-      throw new Error('@deepseek-ai/dsh-console is the abstract console runtime seam; load an implementation such as @deepseek-ai/dsh-console-local instead')
+      throw new Error('@deepseek-ai/dsh-console is the abstract console runtime seam; load an implementation such as @deepseek-ai/dsh-console-tmux instead')
     }
     super(ctx, 'consoles')
   }
 
   /**
-   * Open the configured human shell in one available workspace.
-   * @param request - Workspace and initial dimensions.
+   * List every durable Console known to this provider.
+   * @returns The current catalog, including archived and ended records.
+   */
+  abstract list(): Promise<readonly ConsoleSnapshot[]>
+  /**
+   * Read one Console from the current catalog.
+   * @param consoleId - Durable Console identity.
+   * @returns Its current public state.
+   */
+  abstract snapshot(consoleId: ConsoleId): ConsoleSnapshot
+  /**
+   * Create and publish one durable Console workload.
+   * @param request - Workspace, title, and initial tmux dimensions.
    * @param signal - Allocation cancellation.
-   * @returns the authorized live console after publication.
+   * @returns The published durable Console.
    */
-  abstract openHumanShell(request: HumanShellOpenRequest, signal?: AbortSignal): Promise<ConsoleOpenResult>
+  abstract create(request: ConsoleCreateRequest, signal?: AbortSignal): Promise<ConsoleSnapshot>
   /**
-   * Read current public state without exposing the bearer capability.
-   * @param access - Authorized console reference.
-   * @returns fresh public state.
+   * Replace one Console's display title.
+   * @param consoleId - Durable Console identity.
+   * @param title - Replacement display title.
+   * @returns State after metadata durability.
    */
-  abstract snapshot(access: ConsoleAccess): ConsoleSnapshot
+  abstract rename(consoleId: ConsoleId, title: string): Promise<ConsoleSnapshot>
   /**
-   * Read one repeatable bounded page from an absolute whole-stream cursor.
-   * @param access - Authorized console reference.
+   * Change whether one Console appears in the active catalog.
+   * @param consoleId - Durable Console identity.
+   * @param archived - Desired catalog visibility.
+   * @returns State after metadata durability.
+   */
+  abstract setArchived(consoleId: ConsoleId, archived: boolean): Promise<ConsoleSnapshot>
+  /**
+   * Start one ephemeral terminal Client for a running Console.
+   * @param request - Running Console and initial Client dimensions.
+   * @param signal - Allocation cancellation.
+   * @returns A newly authorized attachment.
+   */
+  abstract attach(request: ConsoleAttachRequest, signal?: AbortSignal): Promise<ConsoleAttachmentOpenResult>
+  /**
+   * Read one attachment's current process and output state.
+   * @param access - Authorized attachment reference.
+   * @returns Fresh public attachment state.
+   */
+  abstract attachmentSnapshot(access: ConsoleAttachmentAccess): ConsoleAttachmentSnapshot
+  /**
+   * Read retained output immediately from one attachment.
+   * @param access - Authorized attachment reference.
    * @param fromByte - Absolute output cursor.
-   * @returns retained bytes or an explicit retention gap.
+   * @returns Retained bytes or an explicit retention gap.
    */
-  abstract readOutput(access: ConsoleAccess, fromByte: number): ConsoleOutputRead
+  abstract readOutput(access: ConsoleAttachmentAccess, fromByte: number): ConsoleOutputRead
   /**
-   * Wait for output, a retention gap, or a terminal state transition and return one atomic observation.
-   * @param access - Authorized console reference.
+   * Wait until one attachment has output or changes state.
+   * @param access - Authorized attachment reference.
    * @param fromByte - Absolute output cursor.
-   * @param signal - Caller cancellation for this one wait.
-   * @returns current console state and one bounded output page.
+   * @param signal - Cancellation for this wait.
+   * @returns Current attachment state and one output page.
    */
-  abstract waitOutput(access: ConsoleAccess, fromByte: number, signal: AbortSignal): Promise<ConsoleOutputObservation>
+  abstract waitOutput(access: ConsoleAttachmentAccess, fromByte: number, signal: AbortSignal): Promise<ConsoleOutputObservation>
   /**
-   * Deliver text to the live terminal input.
-   * @param access - Authorized console reference.
-   * @param data - Terminal input text.
-   * @returns after delivery.
+   * Write raw input to one terminal Client.
+   * @param access - Authorized attachment reference.
+   * @param data - Raw terminal input.
+   * @returns After delivery to the tmux Client PTY.
    */
-  abstract write(access: ConsoleAccess, data: string): Promise<void>
+  abstract write(access: ConsoleAttachmentAccess, data: string): Promise<void>
   /**
-   * Resize the live terminal and commit the dimensions after provider success.
-   * @param access - Authorized console reference.
-   * @param size - New dimensions.
-   * @returns after resize.
+   * Resize one terminal Client PTY.
+   * @param access - Authorized attachment reference.
+   * @param size - New Client dimensions.
+   * @returns After PTY resize.
    */
-  abstract resize(access: ConsoleAccess, size: ConsoleSize): Promise<void>
+  abstract resize(access: ConsoleAttachmentAccess, size: ConsoleSize): Promise<void>
   /**
-   * Signal the terminal's current foreground process group.
-   * @param access - Authorized console reference.
-   * @param signal - Foreground signal.
-   * @returns the exact process group that received the signal.
+   * Detach one ephemeral terminal Client without stopping its Console.
+   * @param access - Authorized attachment reference.
+   * @returns After the tmux Client exits; the Console workload remains alive.
    */
-  abstract signal(access: ConsoleAccess, signal: ConsoleSignal): Promise<ConsoleSignalResult>
+  abstract detach(access: ConsoleAttachmentAccess): Promise<void>
   /**
-   * Terminate the complete terminal session and remove its record.
-   * @param access - Authorized console reference.
-   * @returns after complete session quiescence.
+   * Terminate one durable Console workload and all of its attachments.
+   * @param consoleId - Durable Console identity.
+   * @returns After provider termination and attachment quiescence.
    */
-  abstract stop(access: ConsoleAccess): Promise<void>
+  abstract terminate(consoleId: ConsoleId): Promise<void>
 }
 
 export default ConsoleRuntime

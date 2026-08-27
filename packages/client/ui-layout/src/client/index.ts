@@ -8,12 +8,24 @@
  * presenter, which projects ctx.theme snapshots onto document.body.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { LayoutActions } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
 import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
 import { ThemePresenter } from './theme-presenter.ts'
+import { en, zh, type LayoutLocaleKey } from './locales.ts'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** Actor-pane labels and controls owned by the layout shell. */
+    layout: LayoutLocaleKey
+  }
+}
+
+const NS = 'layout'
 
 // Contract exports only (export-convergence rule: cross-package consumers
 // keep a symbol exported; test-only/package-internal symbols live off /src).
@@ -22,6 +34,8 @@ import { ThemePresenter } from './theme-presenter.ts'
 // against; the frame components and the store factory are package-internal.
 export { LayoutController } from './service.ts'
 export type { ILayout } from './service.ts'
+export type { ActorRef, PaneNode, PaneSplitDirection } from './panes.ts'
+import type { ActorRef } from './panes.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -81,6 +95,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `id` is added beside the shipped entries instead of replacing them.
      */
     'shell.overlay': { kind: 'list'; scope: 'root' }
+    /** Human Terminal body rendered for each Console pane occurrence. */
+    'workspace.console': { kind: 'single'; scope: 'root'; owner: ConsolePaneOwnerProps }
   }
 }
 
@@ -104,8 +120,20 @@ export interface ConvOwnerProps {}
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
 
+/** Owner share supplied to one Human Terminal renderer occurrence. */
+export interface ConsolePaneOwnerProps {
+  /** Durable Console product address. */
+  actor: Extract<ActorRef, { kind: 'console' }>
+  /** Device-local pane identity. */
+  paneId: string
+  /** Whether this pane owns keyboard focus in the canvas. */
+  active: boolean
+  /** Whether the shell is projecting only the focused mobile pane. */
+  mobile: boolean
+}
+
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
-export const inject = ['slots', 'theme']
+export const inject = ['slots', 'theme', 'sessions', 'locale']
 
 /**
  * Client plugin body: provide ctx.layout, then one register() call — AppFrame
@@ -115,15 +143,18 @@ export const inject = ['slots', 'theme']
  */
 export function apply(ctx: ClientContext): void {
   const layout = new LayoutController()
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-layout: dictionaries')
   ctx.effect(() => {
     const disposeService = ctx.reflect.provide('layout', layout)
     const disposeRegistration = ctx.slots.register({
       name: 'root',
+      locale: NS,
       children: {
         'sidebar': { kind: 'single', scope: 'root' },
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
         'shell.overlay': { kind: 'list', scope: 'root' },
+        'workspace.console': { kind: 'single', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
       // entry and delivers useStore/actions to AppFrame as standard props.
@@ -132,7 +163,10 @@ export function apply(ctx: ClientContext): void {
       // conversation business actions belong to their registrants.
       inject: (actions: LayoutActions) => {
         layout.attachActions(actions)
-        return {}
+        return {
+          selectSession: (sessionId: SessionId) => { ctx.sessions.open(sessionId) },
+          stageSession: (sessionId: SessionId) => ctx.sessions.acquire(sessionId),
+        }
       },
     }, AppFrame)
     return () => {

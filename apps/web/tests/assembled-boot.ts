@@ -123,6 +123,7 @@ const bundles = new Map(PLUGINS.map(plugin => [
 
 interface FixtureWindow extends Window {
   __DSH_BOOT__?: { rev: string; entries: WebBootEntry[] }
+  __DSH_CONSOLE_CONFIG__?: { catalogRefreshIntervalMs: number }
   __ModuleLoader__?: ClientModuleLoaderTarget
 }
 
@@ -157,11 +158,25 @@ export function installAssembledBootEnv(): void {
     Object.defineProperty(navigator, 'languages', { value: ['en-US'], configurable: true })
     Object.defineProperty(navigator, 'language', { value: 'en-US', configurable: true })
     document.title = 'DeepSeek Harness'
+    // Mirror the blocking Host index injection used by the shipped Console
+    // plugin. The assembled lane boots client bundles without an HTTP index.
+    win.__DSH_CONSOLE_CONFIG__ = { catalogRefreshIntervalMs: 5_000 }
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     vi.stubGlobal('EventSource', EventSourceStub)
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList)
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
       setTimeout(() => { callback(0) }, 0) as unknown as number)
     vi.stubGlobal('cancelAnimationFrame', (id: number) => { clearTimeout(id) })
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null)
   })
 
   afterEach(async () => {
@@ -169,6 +184,7 @@ export function installAssembledBootEnv(): void {
     unmount = undefined
     cleanup()
     delete win.__DSH_BOOT__
+    delete win.__DSH_CONSOLE_CONFIG__
     delete win.__ModuleLoader__
     document.body.innerHTML = ''
     document.head.querySelectorAll('style[data-plugin]').forEach((style) => { style.remove() })
@@ -179,6 +195,7 @@ export function installAssembledBootEnv(): void {
     const ownNavigator = navigator as unknown as Record<string, unknown>
     delete ownNavigator.languages
     delete ownNavigator.language
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 }

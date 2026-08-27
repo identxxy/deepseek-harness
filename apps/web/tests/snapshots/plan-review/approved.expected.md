@@ -1,3 +1,6 @@
+- text: "Agent Plan a small change: add"
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - 'button "Plan a small change: add" [disabled]'

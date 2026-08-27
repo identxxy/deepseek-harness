@@ -1,3 +1,6 @@
+- text: Agent Use web_search once with queries
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "Use web_search once with queries" [disabled]

@@ -280,7 +280,7 @@
     { "path": "./packages/jobs/jobs-local" },
     { "path": "./packages/jobs/tool-jobs" },
     { "path": "./packages/console/console" },
-    { "path": "./packages/console/console-local" },
+    { "path": "./packages/console/console-tmux" },
     { "path": "./packages/console/console-remote" },
     { "path": "./packages/experimental/agent-team" },
     { "path": "./packages/experimental/tool-agent-team" },

@@ -1,3 +1,6 @@
+- text: "Agent Using ONE run_code program: run"
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - 'button "Using ONE run_code program: run" [disabled]'

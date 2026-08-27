@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {
   RpcResult, SessionId, SubagentAddress,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import type { HostObservable, SessionMaybeProvideInfo } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, SessionMaybeProvideInfo, SessionProvideInfo } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AgentContext } from '../agents/scope.ts'
 import type { SessionSearchResultItem } from '../sessions/manager.ts'
 import type {
@@ -28,6 +28,12 @@ export interface ISessions {
   readonly list: ObservableSnapshot<SessionListState>
   /** Atomic current-session provide projection (the renderer host's `sessions.provideInfo` feed). */
   readonly currentProvideInfo: HostObservable<SessionMaybeProvideInfo>
+  /**
+   * Resolve one Session's render-layer bundle without changing selection.
+   * @param id - explicitly addressed Session id.
+   * @returns the bundle, or undefined when the Session is unavailable.
+   */
+  renderProvideInfo(id: string): SessionProvideInfo | undefined
   /**
    * The `session.search` result bound the wire schema fixes, exposed to
    * presentation as injected data. Not per-connection state: every transport
@@ -127,4 +133,13 @@ export interface ISessions {
    * @returns binding, or undefined for a session neither listed nor already scoped.
    */
   binding(id: SessionId): SessionBinding | undefined
+  /**
+   * Retain and stage one explicitly addressed Session view without changing
+   * the global selection.
+   * Pending or stale persisted ids remain unavailable without throwing; a
+   * later catalog row activates the lease.
+   * @param id - explicitly addressed session id.
+   * @returns idempotent disposer releasing this view's lease.
+   */
+  acquire(id: SessionId): () => void
 }

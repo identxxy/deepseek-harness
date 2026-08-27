@@ -257,6 +257,8 @@ export class SessionRuntime implements ISessions {
   private readonly selection: SnapshotStore<SessionSelection>
 
   private readonly scopes = new Map<SessionId, ScopeRecord>()
+  /** Mounted addressed views retaining an independently staged Session window. */
+  private readonly leases = new Map<SessionId, number>()
   /** The provide channel (roster, materialization rules, current projection) — shared with the test runtime's double. */
   private readonly provideChannel: SessionProvideChannel
   /**
@@ -315,6 +317,7 @@ export class SessionRuntime implements ISessions {
     // The current-provide projection follows the same current writes.
     this.list.subscribe(() => {
       this.followCurrent()
+      this.stageLeases()
       this.provideChannel.publishCurrent()
     })
     this.provideChannel = new SessionProvideChannel({
@@ -578,13 +581,43 @@ export class SessionRuntime implements ISessions {
   }
 
   /**
+   * Retain and stage one explicitly addressed Session view without changing
+   * the global selection. Multiple panes share the same Session window; each
+   * returned disposer releases exactly one holder.
+   * A lease may precede the catalog row during startup; it materializes when
+   * the Session becomes addressable and otherwise remains unavailable.
+   * @param id - explicitly addressed Session id.
+   * @returns idempotent disposer for this holder.
+   */
+  acquire(id: SessionId): () => void {
+    this.leases.set(id, (this.leases.get(id) ?? 0) + 1)
+    this.stageLease(id)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      const count = this.leases.get(id)
+      /* v8 ignore next -- the holder above owns one count until this closure releases it. */
+      if (count === undefined) return
+      if (count > 1) {
+        this.leases.set(id, count - 1)
+        return
+      }
+      this.leases.delete(id)
+      this.pruneScope(id)
+    }
+  }
+
+  /**
    * Resolve one session's render-layer standard-props bundle (ctx never
    * enters the render layer; the renderer subscribes to
    * {@link SessionRuntime.currentProvideInfo}). Pure resolution — render-safe:
    * no staging, no window side effects (StrictMode double-invokes and
    * concurrent discarded passes must stay free).
+   * @param id - explicitly addressed Session id.
+   * @returns the render bundle, or undefined when the Session is unavailable.
    */
-  private provideInfo(id: string): SessionProvideInfo | undefined {
+  renderProvideInfo(id: string): SessionProvideInfo | undefined {
     return this.resolve(id as SessionId)?.provideInfo
   }
 
@@ -593,7 +626,7 @@ export class SessionRuntime implements ISessions {
    * return the static no-session projection rather than removing hook props.
    */
   private maybeProvideInfo(id: string | undefined): SessionMaybeProvideInfo {
-    return (id === undefined ? undefined : this.provideInfo(id)) ?? this.provideChannel.maybeInfo
+    return (id === undefined ? undefined : this.renderProvideInfo(id)) ?? this.provideChannel.maybeInfo
   }
 
   /**
@@ -622,6 +655,19 @@ export class SessionRuntime implements ISessions {
     }
   }
 
+  /** Stage every mounted addressed view whose Session is now catalog-addressable. */
+  private stageLeases(): void {
+    for (const id of this.leases.keys()) this.stageLease(id)
+  }
+
+  /** Materialize and open one lease when its catalog row is available. */
+  private stageLease(id: SessionId): void {
+    if (!this.addressable(id)) return
+    const record = this.resolve(id)
+    /* v8 ignore next -- addressable ids always resolve; retained for future eligibility changes. */
+    if (record !== undefined) void record.session.open()
+  }
+
   /**
    * Lazily mint the scope + binding for an eligible session. Eligibility and
    * prune share one predicate: listed on the host or selected
@@ -631,7 +677,7 @@ export class SessionRuntime implements ISessions {
   private resolve(id: SessionId): ScopeRecord | undefined {
     const existing = this.scopes.get(id)
     if (existing !== undefined) return existing
-    if (!this.eligible(id)) return undefined
+    if (!this.addressable(id)) return undefined
     const { fiber, ctx } = createScope(this.rootCtx, id)
     const session = this.manager.get(id)
     // The Session owns its scoped dispatch point (host Agent.loopCtx mirror);
@@ -652,6 +698,11 @@ export class SessionRuntime implements ISessions {
 
   /** The one aliveness predicate shared by scope mint and prune: host-listed or currently addressed. */
   private eligible(id: SessionId): boolean {
+    return this.addressable(id) || this.leases.has(id)
+  }
+
+  /** Whether catalog or selection state authorizes minting a Session scope. */
+  private addressable(id: SessionId): boolean {
     const { ids, current } = this.list.getSnapshot()
     return current === id || ids.includes(id)
   }
@@ -735,16 +786,21 @@ export class SessionRuntime implements ISessions {
 
   /** Tear down scope + instance for no-longer-eligible sessions off stage; the staged one defers until the stage moves. */
   private pruneScopes(): void {
-    for (const [id, record] of this.scopes) {
-      if (this.eligible(id)) continue
-      if (id === this.watched) {
-        this.deferredRemovals.add(id)
-        continue
-      }
-      this.scopes.delete(id)
-      this.deferredRemovals.delete(id)
-      this.dropScope(id, record)
+    for (const id of this.scopes.keys()) this.pruneScope(id)
+  }
+
+  /** Drop one scope when no catalog, selection, stage, or addressed view retains it. */
+  private pruneScope(id: SessionId): void {
+    if (this.eligible(id)) return
+    if (id === this.watched) {
+      this.deferredRemovals.add(id)
+      return
     }
+    const record = this.scopes.get(id)
+    if (record === undefined) return
+    this.scopes.delete(id)
+    this.deferredRemovals.delete(id)
+    this.dropScope(id, record)
   }
 
   /**

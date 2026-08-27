@@ -1,3 +1,6 @@
+- text: Agent Use only Cordis tools. First
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "Use only Cordis tools. First" [disabled]

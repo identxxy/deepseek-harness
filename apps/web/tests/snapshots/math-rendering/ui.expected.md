@@ -1,3 +1,7 @@
+- text: Agent Math rendering
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Math rendering" [disabled]

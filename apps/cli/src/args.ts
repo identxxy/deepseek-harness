@@ -44,8 +44,17 @@ interface PluginInvocation {
   args: string[]
 }
 
+/** Inspect or attach to the dedicated native tmux Console server. */
+interface ConsoleInvocation {
+  mode: 'console'
+  action: 'list' | 'attach'
+  tmuxPath: string
+  serverName: string
+  consoleId?: string
+}
+
 /** The resolved `dsh` invocation. Help, version, and errors exit inside {@link parseDshArgs}. */
-export type DshInvocation = ProfileInvocation | DumpConfigInvocation | PluginInvocation
+export type DshInvocation = ProfileInvocation | DumpConfigInvocation | PluginInvocation | ConsoleInvocation
 
 /** Launcher flags shared by the default command and the `web` alias. */
 interface BootOptions {
@@ -69,6 +78,8 @@ Examples:
   dsh --profile tui --resume <session>       arguments after the launcher flags reach the app
   dsh --profile web --help                   the web app's own flags and help
   dsh plugin --profile tui add <package>     install a plugin into the tui profile
+  dsh console list                            list DSH-owned tmux Consoles
+  dsh console attach <console-id>             attach this terminal to one Console
 `
 
 /**
@@ -178,6 +189,28 @@ export function parseDshArgs(argv: readonly string[], version: string): DshInvoc
       if (options.profile === '') program.error('error: --profile needs a name')
       if (args.length === 0) program.error('error: plugin needs pnpm arguments to forward (e.g. add <package>)')
       resolved = { mode: 'plugin', profile: options.profile, args }
+    })
+
+  interface ConsoleOptions { tmux: string; serverName: string }
+  const resolveConsoleOptions = (command: Command, options: ConsoleOptions): Pick<ConsoleInvocation, 'tmuxPath' | 'serverName'> => {
+    if (options.tmux === '') command.error('error: --tmux needs an executable')
+    if (options.serverName === '') command.error('error: --server-name needs a name')
+    return { tmuxPath: options.tmux, serverName: options.serverName }
+  }
+  const addConsoleOptions = (command: Command): Command => command
+    .option('--tmux <path>', 'tmux executable', 'tmux')
+    .option('--server-name <name>', 'dedicated tmux server name', 'dsh')
+  const consoleCommand = program.command('console').description('inspect or attach to DSH-owned tmux Consoles')
+  addConsoleOptions(consoleCommand.command('list').description('list DSH-owned tmux Consoles'))
+    .action((options: ConsoleOptions) => {
+      rejectParentOptions('console')
+      resolved = { mode: 'console', action: 'list', ...resolveConsoleOptions(consoleCommand, options) }
+    })
+  addConsoleOptions(consoleCommand.command('attach').description('attach this terminal to one DSH-owned Console'))
+    .argument('<console-id>', 'durable Console UUID')
+    .action((consoleId: string, options: ConsoleOptions) => {
+      rejectParentOptions('console')
+      resolved = { mode: 'console', action: 'attach', consoleId, ...resolveConsoleOptions(consoleCommand, options) }
     })
 
   try {

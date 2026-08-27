@@ -9,6 +9,7 @@
  * registration's bound actions.
  */
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ActorRef, PaneSplitDirection } from './panes.ts'
 import type { createLayoutStore } from './stores.ts'
 
 /** The layout store's bound action set (framework-baked, draft params peeled). */
@@ -30,6 +31,21 @@ export interface ILayout {
   openDetails(): void
   /** Close the details panel. */
   closeDetails(): void
+  /** Replace the active pane with an addressed product actor. */
+  openActor(actor: ActorRef): void
+  /** Add an addressed product actor beside the active pane. */
+  openActorInSplit(actor: ActorRef, direction: PaneSplitDirection): void
+  /**
+   * Remove pane occurrences absent from one actor kind's ready, complete catalog.
+   * The available-id set is consumed synchronously and is not retained.
+   * @param actorKind - actor kind owned by the catalog.
+   * @param availableIds - every currently available actor id after the catalog owner confirms ready.
+   */
+  reconcileActorCatalog(actorKind: ActorRef['kind'], availableIds: ReadonlySet<string>): void
+}
+
+function layoutId(prefix: 'pane' | 'split'): string {
+  return `${prefix}-${globalThis.crypto.randomUUID()}`
 }
 
 /** Cross-plugin viewing-action face (ctx.layout). */
@@ -70,6 +86,25 @@ export class LayoutController implements ILayout {
   /** Close the details panel. */
   closeDetails(): void {
     this.#require().closeDetails()
+  }
+
+  /** Replace the active pane with an addressed product actor. */
+  openActor(actor: ActorRef): void {
+    this.#require().openActor(actor, layoutId('pane'))
+  }
+
+  /** Add an addressed product actor beside the active pane. */
+  openActorInSplit(actor: ActorRef, direction: PaneSplitDirection): void {
+    this.#require().splitActor(actor, direction, layoutId('split'), layoutId('pane'))
+  }
+
+  /**
+   * Remove pane occurrences absent from one actor kind's ready, complete catalog.
+   * @param actorKind - actor kind owned by the catalog.
+   * @param availableIds - synchronously consumed and unretained complete set after the catalog owner confirms ready.
+   */
+  reconcileActorCatalog(actorKind: ActorRef['kind'], availableIds: ReadonlySet<string>): void {
+    this.#require().reconcileActorCatalog(actorKind, availableIds)
   }
 
   #require(): LayoutActions {

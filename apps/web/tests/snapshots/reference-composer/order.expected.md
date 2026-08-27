@@ -1,3 +1,7 @@
+- text: Agent Reference order target
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Reference order target" [disabled]

@@ -18,6 +18,12 @@ function fakeActions(): LayoutActions {
     showConversation: vi.fn(),
     openDetails: vi.fn(),
     closeDetails: vi.fn(),
+    openActor: vi.fn(),
+    splitActor: vi.fn(),
+    focusPane: vi.fn(),
+    closeActorPane: vi.fn(),
+    reconcileActorCatalog: vi.fn(),
+    resizeActorSplit: vi.fn(),
   }
 }
 
@@ -32,12 +38,20 @@ describe('LayoutController', () => {
     service.showConversation()
     service.openDetails()
     service.closeDetails()
+    service.openActor({ kind: 'agent', id: 's1' })
+    service.openActorInSplit({ kind: 'console', id: 'c1' }, 'horizontal')
+    service.reconcileActorCatalog('console', new Set(['c1']))
 
     expect(actions.toggleSidebar).toHaveBeenCalledTimes(1)
     expect(actions.showSessionList).toHaveBeenCalledTimes(1)
     expect(actions.showConversation).toHaveBeenCalledTimes(1)
     expect(actions.openDetails).toHaveBeenCalledTimes(1)
     expect(actions.closeDetails).toHaveBeenCalledTimes(1)
+    expect(actions.openActor).toHaveBeenCalledWith({ kind: 'agent', id: 's1' }, expect.stringMatching(/^pane-/))
+    expect(actions.splitActor).toHaveBeenCalledWith(
+      { kind: 'console', id: 'c1' }, 'horizontal', expect.stringMatching(/^split-/), expect.stringMatching(/^pane-/),
+    )
+    expect(actions.reconcileActorCatalog).toHaveBeenCalledWith('console', new Set(['c1']))
     expect(actions.setSidebar).not.toHaveBeenCalled()
     expect(actions.setDetails).not.toHaveBeenCalled()
   })

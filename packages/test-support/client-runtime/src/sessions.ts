@@ -184,7 +184,7 @@ export class TestSessions implements ISessions {
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
-    method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
+    method: 'open' | 'acquire' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
       | 'clear' | 'search' | 'fork'
     args: unknown[]
   }[] = []
@@ -338,6 +338,11 @@ export class TestSessions implements ISessions {
     return record.provideInfo
   }
 
+  /** Production-name alias used by the renderer host for addressed panes. */
+  renderProvideInfo(id: string): SessionProvideInfo | undefined {
+    return this.provideInfo(id)
+  }
+
   /**
    * Resolve the current-session-optional standard kit (host face member):
    * unknown or absent ids return the static no-session projection.
@@ -375,6 +380,12 @@ export class TestSessions implements ISessions {
     const record = this.records.get(id as SessionId)
     if (record === undefined) return undefined
     return this.bindingOf(id as SessionId, record)
+  }
+
+  /** Retain one addressed fixture view; unknown persisted ids stay unavailable. */
+  acquire(id: SessionId): () => void {
+    this.calls.push({ method: 'acquire', args: [id] })
+    return () => {}
   }
 
   /**

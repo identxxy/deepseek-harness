@@ -229,6 +229,18 @@ describe('web e2e: the conversation column scrolls on one axis', () => {
    */
   const settleAt = async (width: number): Promise<ColumnMetrics> => {
     await page.setViewportSize({ width, height: 900 })
+    // At narrow widths a fresh workspace opens the Session list by design.
+    // This scenario measures the visible conversation column, not the
+    // mounted zero-width destination kept behind mobile navigation.
+    await page.evaluate(() => {
+      const frame = document.querySelector<HTMLElement>('[data-mobile-view]')
+      if (frame?.dataset.mobileView !== 'sessions') return
+      const state = typeof history.state === 'object' && history.state !== null
+        ? history.state as Record<string, unknown>
+        : {}
+      history.replaceState({ ...state, __dshMobileView: 'conversation' }, document.title)
+      dispatchEvent(new PopStateEvent('popstate', { state: history.state as unknown }))
+    })
     let previous = -1
     await expect.poll(async () => {
       const current = (await measureColumn(page, width)).columnWidth

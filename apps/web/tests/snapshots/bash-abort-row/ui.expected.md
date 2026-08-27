@@ -1,3 +1,7 @@
+- text: "Agent Run two shell commands: wait"
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - 'button "Run two shell commands: wait" [disabled]'

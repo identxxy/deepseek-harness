@@ -1,3 +1,6 @@
+- text: Agent /user-invoke-demo and confirm the fixtur
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "/user-invoke-demo and confirm the fixtur" [disabled]

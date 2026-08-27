@@ -1,6 +1,6 @@
 # Agent Note: tmux-backed Human Terminal actors
 
-Status: proposed
+Status: implemented
 
 English | [中文](2026-08-26-tmux-human-terminal-actors.zh.md)
 
@@ -10,7 +10,7 @@ A self-hosted workspace needs model Agents and direct human terminals under one 
 
 The product calls both workloads actors, but a direct terminal has no model, prompt, inbox, turn, or agent loop. Registering it as a core `Agent` would make model lifecycle events and durable Session logs describe work that never occurred.
 
-## Proposal
+## Decision
 
 Treat a Human Terminal as a first-class product actor backed by the Console capability, not as a core `Agent`. The unified Workspace UI lists model Agent Sessions and Human Consoles together while each kind retains its own runtime and renderer. Agent conversations remain event-sourced; terminal bytes remain outside Session logs, telemetry, and the connection-wide Host event stream.
 
@@ -22,12 +22,16 @@ Creation publishes only after the detached tmux session and its metadata have be
 
 Desktop clients render addressable Agent and Console actors in resizable horizontal or vertical splits. The active pane receives ordinary Sidebar opens; an explicit action opens an actor in a new split. Layout state belongs to each Client device. Narrow clients render one focused actor and use browser history to return to the unified list. A local `dsh console attach <console-id>` command replaces its process with the native tmux client; it detects an existing tmux client instead of creating an unsupported nested attachment.
 
+The ready, complete Host Console catalog is the Client authority for Console availability. Every running Console remains available, including an archived Console with an open pane. An ended or missing Console is removed from navigation and from every device-local pane leaf in one layout update; the layout collapses empty splits, chooses a surviving active pane, and returns a narrow Client with no panes to the unified list. Loading and error states never imply workload removal. A Web attachment that observes an exited or failed tmux client requests an immediate catalog refresh but does not close panes directly, so detaching a viewer is not treated as workload termination.
+
+Catalog refresh admits one current list request and one coalesced deferred request, while catalog mutations execute in invocation order. Connection reset, superseding mutations, and plugin disposal invalidate older responses. Browser-side cancellation settles waits even when a Remote promise never responds, and disposal waits for catalog, mutation, and attachment work to become quiescent.
+
 ## Package roles
 
 - `dsh-console` defines durable Console identity, ephemeral attachment identity, authorization, lifecycle, and provider operations.
 - `dsh-console-tmux` provides DSH-owned tmux workloads and tmux-client attachments through the subprocess capability.
-- `dsh-console-remote` exposes authorized list, create, attach, archive, terminate, attachment I/O, resize, signal, and detach operations.
-- Client Console runtime and `dsh-ui-console` project Consoles into the unified Workspace actor list and render Web terminal panes.
+- `dsh-console-remote` exposes authorized list, create, attach, archive, terminate, attachment I/O, resize, and detach operations.
+- Client Console runtime and `dsh-client-ui-console` project Consoles into the unified Workspace actor list and render Web terminal panes.
 - The CLI consumer resolves one Console id and executes the native tmux attachment without making Kitty a dependency.
 
 ## Alternatives considered
@@ -44,17 +48,19 @@ Desktop clients render addressable Agent and Console actors in resizable horizon
 
 **Share one Web tmux client among all viewers.** Rejected because dimensions, reconnect redraw, cursor retention, and attachment cleanup are viewer-specific. Ephemeral per-viewer attachments match tmux's native client model.
 
-## Acceptance criteria
+## Verification
 
 - A Human Terminal created in a registered Workspace starts one real session on the dedicated tmux server and appears beside Agent Sessions without creating a core Agent or model turn.
 - The same Console accepts concurrent Web and native tmux attachments; input and screen updates are visible across clients, and detaching every client leaves the workload running.
 - Restarting the dsh Host preserves the tmux workload and Console id, invalidates old process-local capabilities, and permits a fresh Web attachment with a complete screen redraw.
 - Desktop clients can place Agent and Console actors in resizable splits; narrow clients focus one actor and return to the unified list through browser history.
+- Shell exit, explicit termination, and external tmux termination remove the Console navigation row and every pane that references it after a ready catalog update; split collapse and active-pane fallback happen atomically, while loading or error catalogs preserve the existing layout.
+- A real xterm Ctrl-D path produces an exited attachment, triggers an immediate catalog refresh, and converges through the same catalog reconciliation as periodic refresh and explicit termination.
 - Archive, restore, detach, external termination, and explicit confirmed termination have distinct observable states and never kill unrelated tmux sessions.
 - The provider does not inherit Harness credential-shaped environment variables, import arbitrary tmux sessions, interpolate remote values into shell commands, or store authority in tmux metadata.
 - Real tmux integration, Host restart, remote authorization, GUI behavior, keyless snapshots, and existing Agent Terminal ownership tests cover the shipped composition.
 
-## Risks
+## Consequences
 
 Human Terminal access is remote code execution and relies on the existing device-auth ingress plus per-attachment capabilities. A compromised enrolled device has the same shell authority as the user until its device credential is revoked.
 

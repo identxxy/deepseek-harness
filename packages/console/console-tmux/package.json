@@ -1,11 +1,11 @@
 {
-  "name": "@deepseek-ai/dsh-console-local",
-  "description": "Process-local host-owned console runtime provider for DeepSeek Harness",
+  "name": "@deepseek-ai/dsh-console-tmux",
+  "description": "tmux-backed durable Human Terminal provider for DeepSeek Harness",
   "version": "0.1.1-rc.2",
   "publishConfig": { "access": "public" },
   "repository": {
     "type": "git", "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/console/console-local"
+    "directory": "packages/console/console-tmux"
   },
   "type": "module",
   "main": "lib/index.js",

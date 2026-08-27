@@ -1,0 +1,7 @@
+row=Terminal
+actor=console
+pane-title=fx-console-1
+terminal-title=Terminal
+cwd=/tmp/fixture
+phase=running
+screen=fixture terminal ready$

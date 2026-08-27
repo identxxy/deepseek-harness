@@ -17,6 +17,9 @@ import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import { SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
+import type { LayoutActions } from '@deepseek-ai/dsh-client-ui-layout/src/client/service.ts'
+import type { PaneNode } from '@deepseek-ai/dsh-client-ui-layout/src/client/panes.ts'
+import { en, zh, type LayoutLocaleKey } from '@deepseek-ai/dsh-client-ui-layout/src/client/locales.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -31,10 +34,6 @@ const baselinesReady = { current: true }
 // mode runs the empty branch — the frame must work against exactly this
 // shape. Typed as the seat's own component type so the branded sessionId
 // parameter stays contract-checked.
-const SessionProviderStub: AppFrameProps['SessionProvider'] = ({ children, empty }) =>
-  selectedSession.current === undefined ? <>{empty?.() ?? null}</> : <>{children(selectedSession.current)}</>
-
-
 /** Observer stub: captures the callback so tests can fire resizes manually. */
 let fireResize: (() => void) | null = null
 class ResizeObserverStub {
@@ -52,44 +51,76 @@ function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapsho
   return function useSelector<S>(sel: (s: T) => S): S { return sel(useSyncExternalStore(inst.subscribe, inst.getSnapshot)) }
 }
 
-function mountFrame() {
+function agentIds(node: PaneNode | null): SessionId[] {
+  if (node === null) return []
+  if (node.kind === 'leaf') return node.actor.kind === 'agent' ? [node.actor.id as SessionId] : []
+  return [...agentIds(node.first), ...agentIds(node.second)]
+}
+
+function mountFrame(options: {
+  availableSessionIds?: readonly SessionId[]
+  stageSession?: (sessionId: SessionId) => (() => void)
+  selectSession?: (sessionId: SessionId) => void
+  setupLayout?: (actions: LayoutActions) => void
+  locale?: typeof en
+  sessionUnavailable?: boolean
+} = {}) {
   window.innerWidth = frameWidth // first-render viewport source before the observer fires
   const instance = createLayoutStore().create()
+  options.setupLayout?.(instance.actions)
   const slotCalls: { key: string; props: unknown }[] = []
   const renderSlot = ((key: string, owner: object) => {
     slotCalls.push({ key, props: owner })
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
-    if (key === 'conversation') return <div data-testid="center-content" />
+    if (key === 'conversation') return <header data-testid="center-content" />
     if (key === 'details') return <div data-testid="details-content" />
+    if (key === 'workspace.console') return <div data-testid="console-content" data-console-id={(owner as { actor: { id: string } }).actor.id} />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
-  const useSessions = ((sel: (s: SessionListState) => unknown) => {
-    const current = selectedSession.current
-    const sessionState = {
-      ids: current === undefined ? [] : [current],
-      byId: current === undefined
-        ? {}
-        : { [current]: { id: current, displayTitle: 'Test', running: false, blank: selectedSessionBlank.current, updatedAt: 1 } },
-      current,
-      phase: 'ready',
-    } as SessionListState
-    return sel(sessionState)
-  }) as never
   const workspaceState: WorkspaceListState = {
     items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     baselinesReady: baselinesReady.current, recentWorkspaceId: undefined,
   }
-  const element = () => (
-    <AppFrame
-      useStore={hookOf(instance)}
-      actions={instance.actions}
-      renderSlot={renderSlot}
-      useSessions={useSessions}
-      useWorkspaces={((sel: (s: WorkspaceListState) => unknown) => sel(workspaceState)) as never}
-      SessionProvider={SessionProviderStub}
-    />
-  )
+  const SessionProviderStub: AppFrameProps['SessionProvider'] = ({ sessionId, children, empty }) => {
+    const selected = sessionId ?? selectedSession.current
+    return selected === undefined || options.sessionUnavailable === true
+      ? <>{empty?.() ?? null}</>
+      : <>{children(selected)}</>
+  }
+  const element = () => {
+    const current = selectedSession.current
+    const ids = [...new Set([
+      ...(current === undefined ? [] : [current]),
+      ...(options.availableSessionIds ?? agentIds(instance.getSnapshot().paneRoot)),
+    ])]
+    const sessionState = {
+      ids,
+      byId: Object.fromEntries(ids.map(id => [id, {
+        id,
+        displayTitle: id === current ? 'Test' : id,
+        running: false,
+        blank: id === current ? selectedSessionBlank.current : false,
+        updatedAt: 1,
+      }])),
+      current,
+      phase: 'ready',
+    } as SessionListState
+    const useSessions = ((sel: (s: SessionListState) => unknown) => sel(sessionState)) as never
+    return (
+      <AppFrame
+        useStore={hookOf(instance)}
+        actions={instance.actions}
+        renderSlot={renderSlot}
+        useSessions={useSessions}
+        useWorkspaces={((sel: (s: WorkspaceListState) => unknown) => sel(workspaceState)) as never}
+        SessionProvider={SessionProviderStub}
+        selectSession={options.selectSession ?? ((sessionId) => { selectedSession.current = sessionId })}
+        stageSession={options.stageSession ?? (() => () => {})}
+        t={key => (options.locale ?? en)[key as LayoutLocaleKey]}
+      />
+    )
+  }
   const utils = render(element())
   const frame = utils.container.firstElementChild as HTMLElement
   return { instance, frame, slotCalls, rerenderFrame: () => { utils.rerender(element()) }, ...utils }
@@ -111,6 +142,7 @@ function drag(handle: Element, fromX: number, toX: number): void {
 }
 
 beforeEach(() => {
+  window.localStorage.clear()
   frameWidth = 1920
   selectedSession.current = 's-test' as SessionId
   selectedSessionBlank.current = false
@@ -142,6 +174,7 @@ describe('AppFrame', () => {
   it('renders three tracks from store state', () => {
     const { frame } = mountFrame()
     expect(tracks(frame)).toEqual([280, 0])
+    expect((frame.children[1] as HTMLElement).style.width).toBe('')
   })
 
   it('renders the session pair with empty owner shares (sessionId is framework-standard)', () => {
@@ -165,6 +198,21 @@ describe('AppFrame', () => {
     expect(slotCalls.map(c => c.key)).toContain('conversation')
   })
 
+  it('adopts the first current Session without replacing the conversation DOM', () => {
+    selectedSession.current = undefined
+    const { instance, getByLabelText, getByTestId, rerenderFrame } = mountFrame()
+    const conversation = getByTestId('center-content')
+
+    selectedSession.current = 's-adopted' as SessionId
+    act(() => { rerenderFrame() })
+
+    expect(getByTestId('center-content')).toBe(conversation)
+    expect(instance.getSnapshot()).toMatchObject({ paneRoot: null, activePaneId: null })
+
+    act(() => { getByLabelText('Split right').click() })
+    expect(instance.getSnapshot().paneRoot).toMatchObject({ kind: 'split', direction: 'horizontal' })
+  })
+
   it('renders both column occupants before baselines settle (no loading gate)', () => {
     // No loading gate: a bare loading status reads worse than the shell's own
     // pending rendering — both occupants mount from first paint.
@@ -172,6 +220,165 @@ describe('AppFrame', () => {
     const { slotCalls } = mountFrame()
     expect(slotCalls.map(c => c.key)).toContain('conversation')
     expect(slotCalls.map(c => c.key)).toContain('details')
+  })
+
+  it('renders an addressed Agent and Human Terminal in independent desktop panes', () => {
+    const { instance, getByTestId, getByRole, container } = mountFrame({
+      availableSessionIds: ['s-agent' as SessionId],
+    })
+    act(() => {
+      instance.actions.openActor({ kind: 'agent', id: 's-agent' }, 'pane-agent')
+      instance.actions.splitActor({ kind: 'console', id: 'c-terminal' }, 'horizontal', 'split-1', 'pane-terminal')
+    })
+    expect(getByTestId('center-content')).toBeTruthy()
+    expect(getByTestId('console-content').getAttribute('data-console-id')).toBe('c-terminal')
+    expect(container.querySelectorAll('[data-actor-pane]')).toHaveLength(2)
+    expect(getByTestId('center-content').getAttribute('role')).toBeNull()
+    expect(getByTestId('center-content').tagName).toBe('HEADER')
+    expect(getByRole('banner')).toBe(getByTestId('center-content'))
+    expect(container.querySelector('[data-actor-pane]')?.tagName).toBe('DIV')
+    expect(container.querySelector('[class*="paneHeader"]')?.tagName).toBe('DIV')
+  })
+
+  it('renders pane chrome in the active locale', () => {
+    const english = mountFrame({ locale: en })
+    act(() => {
+      english.instance.actions.openActor({ kind: 'console', id: 'c-terminal' }, 'pane-terminal')
+    })
+    expect(english.getByText('Terminal')).toBeTruthy()
+    expect(english.getByLabelText('Split right')).toBeTruthy()
+    expect(english.getByLabelText('Split down')).toBeTruthy()
+    expect(english.getByLabelText('Close pane')).toBeTruthy()
+    english.unmount()
+
+    const chinese = mountFrame({ locale: zh })
+    act(() => {
+      chinese.instance.actions.openActor({ kind: 'console', id: 'c-terminal' }, 'pane-terminal')
+    })
+    expect(chinese.getByText('终端')).toBeTruthy()
+    expect(chinese.getByLabelText('向右分屏')).toBeTruthy()
+    expect(chinese.getByLabelText('向下分屏')).toBeTruthy()
+    expect(chinese.getByLabelText('关闭窗格')).toBeTruthy()
+  })
+
+  it('localizes an unavailable addressed Agent', () => {
+    const availableSessionIds = ['s-missing' as SessionId]
+    const english = mountFrame({ availableSessionIds, locale: en, sessionUnavailable: true })
+    act(() => { english.instance.actions.openActor({ kind: 'agent', id: 's-missing' }, 'pane-missing') })
+    expect(english.getByText('Session unavailable')).toBeTruthy()
+    english.unmount()
+
+    const chinese = mountFrame({ availableSessionIds, locale: zh, sessionUnavailable: true })
+    act(() => { chinese.instance.actions.openActor({ kind: 'agent', id: 's-missing' }, 'pane-missing') })
+    expect(chinese.getByText('会话不可用')).toBeTruthy()
+  })
+
+  it('keeps a restored active Console when the persisted current Session first projects', () => {
+    selectedSession.current = undefined
+    const first = mountFrame()
+    act(() => {
+      first.instance.actions.openActor({ kind: 'console', id: 'c-restored' }, 'pane-console')
+    })
+    first.unmount()
+
+    selectedSession.current = 's-restored' as SessionId
+    const restored = mountFrame()
+    expect(restored.instance.getSnapshot().paneRoot).toMatchObject({
+      kind: 'leaf',
+      id: 'pane-console',
+      actor: { kind: 'console', id: 'c-restored' },
+    })
+    expect(restored.instance.getSnapshot().activePaneId).toBe('pane-console')
+  })
+
+  it('drops a restored Agent pane that is absent from the ready Session catalog', () => {
+    selectedSession.current = undefined
+    const first = mountFrame()
+    act(() => {
+      first.instance.actions.openActor({ kind: 'agent', id: 's-draft' }, 'pane-draft')
+    })
+    first.unmount()
+
+    const selectSession = vi.fn()
+    const restored = mountFrame({ selectSession, availableSessionIds: [] })
+
+    expect(selectSession).not.toHaveBeenCalled()
+    expect(restored.instance.getSnapshot()).toMatchObject({ paneRoot: null, activePaneId: null })
+  })
+
+  it('replaces the active Console after a post-mount Session selection', () => {
+    selectedSession.current = undefined
+    const frame = mountFrame()
+    act(() => { frame.instance.actions.openActor({ kind: 'console', id: 'c-active' }, 'pane-console') })
+
+    selectedSession.current = 's-selected' as SessionId
+    act(() => { frame.rerenderFrame() })
+    expect(frame.instance.getSnapshot().paneRoot).toMatchObject({
+      kind: 'leaf',
+      id: 'pane-console',
+      actor: { kind: 'agent', id: 's-selected' },
+    })
+  })
+
+  it.each([
+    ['catalog reconciliation', (actions: LayoutActions) => { actions.reconcileActorCatalog('console', new Set()) }],
+    ['ordinary close', (actions: LayoutActions) => { actions.closeActorPane('pane-console') }],
+  ])('selects the surviving Agent after %s removes the active Console', (_label, remove) => {
+    const selectSession = vi.fn((sessionId: SessionId) => { selectedSession.current = sessionId })
+    const frame = mountFrame({
+      selectSession,
+      setupLayout: (actions) => {
+        actions.openActor({ kind: 'agent', id: 's-fallback' }, 'pane-agent')
+        actions.splitActor({ kind: 'console', id: 'c-active' }, 'horizontal', 'split-1', 'pane-console')
+      },
+    })
+    selectSession.mockClear()
+
+    act(() => { remove(frame.instance.actions) })
+
+    expect(frame.instance.getSnapshot().activePaneId).toBe('pane-agent')
+    expect(selectSession).toHaveBeenCalledWith('s-fallback')
+    expect(selectedSession.current).toBe('s-fallback')
+  })
+
+  it('does not restore the old active Agent during an external Session transition', () => {
+    const selectSession = vi.fn((sessionId: SessionId) => { selectedSession.current = sessionId })
+    const frame = mountFrame({
+      selectSession,
+      setupLayout: (actions) => { actions.openActor({ kind: 'agent', id: 's-old' }, 'pane-agent') },
+    })
+    selectSession.mockClear()
+
+    selectedSession.current = 's-external' as SessionId
+    act(() => { frame.rerenderFrame() })
+
+    expect(selectSession).not.toHaveBeenCalledWith('s-old')
+    expect(frame.instance.getSnapshot().paneRoot).toMatchObject({ actor: { kind: 'agent', id: 's-external' } })
+  })
+
+  it('stages every mounted Agent pane and releases only its own lease', () => {
+    selectedSession.current = undefined
+    const staged: string[] = []
+    const leaseCounts = new Map<string, number>()
+    const frame = mountFrame({
+      availableSessionIds: ['s-one' as SessionId, 's-two' as SessionId],
+      stageSession: (sessionId) => {
+        staged.push(sessionId)
+        leaseCounts.set(sessionId, (leaseCounts.get(sessionId) ?? 0) + 1)
+        return () => { leaseCounts.set(sessionId, (leaseCounts.get(sessionId) ?? 1) - 1) }
+      },
+    })
+    act(() => {
+      frame.instance.actions.openActor({ kind: 'agent', id: 's-one' }, 'pane-one')
+      frame.instance.actions.splitActor({ kind: 'agent', id: 's-two' }, 'horizontal', 'split-agents', 'pane-two')
+    })
+    expect(staged).toEqual(['s-one', 's-two'])
+    expect(Object.fromEntries(leaseCounts)).toEqual({ 's-one': 1, 's-two': 1 })
+
+    act(() => { frame.instance.actions.closeActorPane('pane-two') })
+    expect(Object.fromEntries(leaseCounts)).toEqual({ 's-one': 1, 's-two': 0 })
+    frame.unmount()
+    expect(Object.fromEntries(leaseCounts)).toEqual({ 's-one': 0, 's-two': 0 })
   })
 
   it('ignores unselected states and closes only when the Session id changes', () => {
@@ -287,12 +494,29 @@ describe('AppFrame', () => {
 })
 
 describe('AppFrame — single-pane mobile navigation', () => {
+  it('focuses the explicitly reopened current Agent after a Console was active', () => {
+    frameWidth = 980
+    const { instance, container } = mountFrame()
+    act(() => {
+      instance.actions.splitActor({ kind: 'console', id: 'c-mobile' }, 'horizontal', 'split-mobile', 'pane-console')
+    })
+    expect(container.querySelector('[data-actor-kind="console"]')).toBeTruthy()
+
+    act(() => {
+      instance.actions.openActor({ kind: 'agent', id: selectedSession.current! }, 'unused-pane')
+      instance.actions.showConversation()
+    })
+    expect(container.querySelector('[data-actor-kind="agent"]')).toBeTruthy()
+    expect(container.querySelector('[data-actor-kind="console"]')).toBeNull()
+  })
+
   it('starts in the selected conversation with the sidebar fully hidden', () => {
     frameWidth = 980
     const { frame, slotCalls } = mountFrame()
     expect(tracks(frame)).toEqual([0, 0])
     expect(frame.dataset.mobileView).toBe('conversation')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    expect((frame.children[1] as HTMLElement).style.width).toBe('980px')
     expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: 0 })
     expect(window.history.state).toMatchObject({ __dshMobileView: 'conversation' })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
@@ -305,6 +529,7 @@ describe('AppFrame — single-pane mobile navigation', () => {
     expect(tracks(frame)).toEqual([980, 0])
     expect(frame.dataset.mobileView).toBe('sessions')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    expect((frame.children[1] as HTMLElement).style.width).toBe('980px')
     expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: false, width: 980 })
     expect(window.history.state).toMatchObject({ __dshMobileView: 'sessions' })
   })

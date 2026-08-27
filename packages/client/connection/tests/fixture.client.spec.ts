@@ -999,6 +999,27 @@ describe('FixtureApiClient (protocol-level fake carrier)', () => {
     expect(() => (client as unknown as { doFetch(): Promise<Response> }).doFetch()).toThrow(/doFetch must be unreachable/)
   })
 
+  it('projects terminal Ctrl-D as an ended Console and exited attachment', async () => {
+    const client = new FixtureApiClient()
+    const request = (endpoint: string, value: object = { args: {} }) => client.rpc.call('/api', endpoint, value)
+    await expect(request('consoles/create', { args: { request: {
+      workspaceId: 'fx-ws-home', title: 'Terminal', initialSize: { rows: 24, cols: 80 },
+    } } })).resolves.toMatchObject({ ok: true, value: { ok: true, value: { id: 'fx-console-1' } } })
+    await expect(request('consoles/attach', { args: { request: {
+      consoleId: 'fx-console-1', size: { rows: 24, cols: 80 },
+    } } })).resolves.toMatchObject({ ok: true, value: { ok: true, value: {
+      access: { attachmentId: 'fx-console-attachment-1', capability: 'fx-console-capability-1' },
+    } } })
+    const access = { attachmentId: 'fx-console-attachment-1', capability: 'fx-console-capability-1' }
+    await expect(request('consoles/write', { args: { request: { access, data: '\x04' } } })).resolves.toMatchObject({ ok: true })
+    await expect(request('consoles/read', { args: { request: { access, fromByte: 0, waitMs: 0 } } })).resolves.toMatchObject({
+      ok: true, value: { ok: true, value: { attachment: { status: { kind: 'exited', exitCode: 0, signal: null } } } },
+    })
+    await expect(request('consoles/list')).resolves.toMatchObject({
+      ok: true, value: { ok: true, value: [{ id: 'fx-console-1', status: { kind: 'ended', reason: 'external' } }] },
+    })
+  })
+
   it('mints request ids, taps all four full forms, and never touches doFetch', async () => {
     const client = new FixtureApiClient()
     const tapped: RpcMessage[] = []

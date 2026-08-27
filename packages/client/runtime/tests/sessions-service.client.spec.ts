@@ -161,6 +161,60 @@ describe('scope tree', () => {
     expect(b.svc.scope(sid('s1'))).toBe(scoped)
   })
 
+  it('reference-counts addressed view leases and drops a removed Session after the last release', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    const releaseFirst = b.svc.acquire(sid('s1'))
+    const leasedScope = b.svc.scope(sid('s1'))
+    const releaseSecond = b.svc.acquire(sid('s1'))
+    expect(b.api.calls.filter(call => call.method === 'session.history')).toHaveLength(1)
+
+    await feedList(b, [])
+    expect(b.svc.scope(sid('s1'))).toBe(leasedScope)
+    releaseFirst()
+    expect(b.svc.scope(sid('s1'))).toBe(leasedScope)
+    releaseSecond()
+    expect(b.svc.scope(sid('s1'))).toBeUndefined()
+
+    // A stale React cleanup is harmless and cannot release another holder.
+    releaseSecond()
+    expect(b.svc.scope(sid('s1'))).toBeUndefined()
+  })
+
+  it('stages a pending addressed lease when its Session later enters the catalog', async () => {
+    const b = bench()
+    const release = b.svc.acquire(sid('later'))
+    expect(b.svc.scope(sid('later'))).toBeUndefined()
+    expect(b.api.calls.filter(call => call.method === 'session.history')).toHaveLength(0)
+
+    await feedList(b, [{ id: 'later' }])
+    expect(b.svc.scope(sid('later'))).toBeDefined()
+    expect(b.api.calls.filter(call => call.method === 'session.history')).toHaveLength(1)
+    release()
+  })
+
+  it('keeps a permanently unknown addressed lease unavailable without throwing or minting a scope', async () => {
+    const b = bench()
+    const release = b.svc.acquire(sid('missing'))
+    await feedList(b, [])
+    expect(b.svc.scope(sid('missing'))).toBeUndefined()
+    expect(b.api.calls.filter(call => call.method === 'session.history')).toHaveLength(0)
+    expect(() => { release() }).not.toThrow()
+  })
+
+  it('makes StrictMode-style lease cleanup independent and idempotent', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    const staleRelease = b.svc.acquire(sid('s1'))
+    staleRelease()
+    const liveRelease = b.svc.acquire(sid('s1'))
+    staleRelease()
+    await feedList(b, [])
+    expect(b.svc.scope(sid('s1'))).toBeDefined()
+    liveRelease()
+    expect(b.svc.scope(sid('s1'))).toBeUndefined()
+  })
+
   it('cancels a deferred teardown when the id reappears in the list', async () => {
     const b = bench()
     await feedList(b, [{ id: 's1' }])

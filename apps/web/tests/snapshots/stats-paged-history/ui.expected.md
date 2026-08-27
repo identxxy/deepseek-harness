@@ -1,3 +1,7 @@
+- text: Agent {{workspace}}
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "{{workspace}}" [disabled]

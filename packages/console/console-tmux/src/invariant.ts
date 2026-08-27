@@ -1,10 +1,10 @@
-/** Package-owned invariant companion for the local console provider. @module @deepseek-ai/dsh-console-local/invariant */
+/** Package-owned invariant companion for the tmux Console provider. @module @deepseek-ai/dsh-console-tmux/invariant */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
-const PACKAGE_NAME = '@deepseek-ai/dsh-console-local'
-export const name = 'console-local-invariant'
+const PACKAGE_NAME = '@deepseek-ai/dsh-console-tmux'
+export const name = 'console-tmux-invariant'
 export const inject = ['invariants']
-/** No runtime invariant: authorization and publication state are private and enforced by every operation. */
+/** No runtime invariant: tmux discovery, attachment authorization, and publication state are provider-private. */
 const install: InvariantInstaller = () => {}
 /** @param ctx - Context carrying invariant registration. @returns registration disposer. */
 export const apply = (ctx: Context): Promise<() => void> => Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install))

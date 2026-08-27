@@ -556,6 +556,10 @@ describe('web e2e: settings modal and General preferences', () => {
       const dialog = frPage.getByRole('dialog', { name: 'Settings' })
       await dialog.waitFor({ timeout: 10_000 })
       await dialog.getByRole('button', { name: 'English' }).waitFor({ timeout: 10_000 })
+      await expect.poll(
+        () => dialog.getByRole('button', { name: 'Standard mode', exact: true }).isEnabled(),
+        { timeout: 10_000 },
+      ).toBe(true)
       // The markup already ships `en`, so this alone cannot prove the sync ran
       // — the zh scenario above is the discriminating half. Asserted here too
       // so a future change that resolves en but writes the wrong tag is caught.
@@ -575,6 +579,8 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['dialog-en.expected.md', 'dialog.expected.md', 'plugins.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, [
+      'dialog-en.expected.md', 'dialog.expected.md', 'mobile-navigation.expected.md', 'plugins.expected.md',
+    ])
   })
 })

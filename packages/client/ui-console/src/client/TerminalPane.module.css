@@ -1,0 +1,101 @@
+.root {
+  position: relative;
+  display: grid;
+  grid-template-rows: 30px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #0b0f12;
+}
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  background: #10171c;
+  color: #d6e0e6;
+  font-size: 11px;
+}
+
+.title {
+  flex: none;
+  max-width: 36%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.path {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #81909a;
+}
+
+.phase {
+  flex: none;
+  color: #70c79a;
+  text-transform: capitalize;
+}
+
+.root[data-terminal-phase='error'] .phase,
+.root[data-terminal-phase='ended'] .phase {
+  color: #f09a8e;
+}
+
+.terminal {
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 8px;
+  overflow: hidden;
+}
+
+.terminal :global(.xterm) {
+  height: 100%;
+}
+
+.error {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  max-width: min(520px, calc(100% - 24px));
+  padding: 8px 10px;
+  border: 1px solid rgb(240 154 142 / 45%);
+  border-radius: 7px;
+  background: rgb(48 22 21 / 92%);
+  color: #ffd5cf;
+  font-size: 12px;
+}
+
+.mobileKeys {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  overflow-x: auto;
+  background: rgb(13 19 23 / 94%);
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.mobileKeys button {
+  flex: none;
+  min-width: 42px;
+  height: 32px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 6px;
+  background: #1a242b;
+  color: #dce5ea;
+  font: inherit;
+  font-size: 12px;
+}

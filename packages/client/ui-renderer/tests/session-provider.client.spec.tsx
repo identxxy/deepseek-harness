@@ -55,6 +55,7 @@ function makeHost(bodies: { root: (rp: (key: string, owner: object) => React.Rea
     sessions: {
       list: observable<unknown>({ ids: [] }),
       provideInfo: provide,
+      provideInfoFor: id => infos.get(id),
     },
     workspaces: { list: observable<unknown>({ items: [] }) },
   }
@@ -162,6 +163,27 @@ describe('SessionProvider', () => {
     act(() => { h.current.set('s2') })
     expect(seen.at(-1)!['read']).toBe('s2')
     expect(seen.at(-1)!['sessionId']).toBe('s2')
+  })
+
+  it('binds an explicitly addressed session without following the global selection', () => {
+    const h = makeHost({
+      root: renderSlot => (
+        <SessionProvider sessionId="s2" empty={() => <span>missing</span>}>
+          {() => renderSlot('k.session', {})}
+        </SessionProvider>
+      ),
+    })
+    h.addSession('s1')
+    h.addSession('s2')
+    h.registerSession({
+      component: (props: { useSession?: <S>(sel: (s: { sid: string }) => S) => S }) => (
+        <b>{props.useSession!(session => session.sid)}</b>
+      ),
+      options: {},
+    })
+    const view = render(<>{createSlotRenderer().renderRoot(h.host, {})}</>)
+    act(() => { h.current.set('s1') })
+    expect(view.container.textContent).toBe('s2')
   })
 
   it('republishes a mounted session entry when its provide bundle changes under the same id', () => {

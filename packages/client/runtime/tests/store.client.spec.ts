@@ -122,6 +122,38 @@ describe('createSnapshotStore', () => {
     const revived = createSnapshotStore(init(), { persist: { name: 'spec-store' } })
     expect(revived.getSnapshot().a.n).toBe(42)
   })
+
+  it('persists and restores a validated projection without retaining transient fields', () => {
+    const backing = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => backing.get(k) ?? null,
+      setItem: (k: string, v: string) => { backing.set(k, v) },
+      removeItem: (k: string) => { backing.delete(k) },
+    })
+    const handle = defineStore({
+      init: () => ({ transient: 10, durable: 'initial' }),
+      persist: {
+        name: 'spec.projected',
+        select: (state: { transient: number; durable: string }) => ({ durable: state.durable }),
+        merge: (initial: { transient: number; durable: string }, persisted: unknown) => {
+          if (typeof persisted !== 'object' || persisted === null || !('durable' in persisted)
+            || typeof persisted.durable !== 'string') throw new Error('invalid durable state')
+          return { ...initial, durable: persisted.durable }
+        },
+      },
+      actions: {
+        setTransient: (d, value: number) => { d.transient = value },
+        setDurable: (d, value: string) => { d.durable = value },
+      },
+    })
+    const first = handle.create()
+    first.actions.setTransient(99)
+    first.actions.setDurable('saved')
+    expect(JSON.parse(backing.get('spec.projected')!)).toEqual({ durable: 'saved' })
+
+    const revived = handle.create()
+    expect(revived.store.getSnapshot()).toEqual({ transient: 10, durable: 'saved' })
+  })
 })
 
 describe('defineStore', () => {
