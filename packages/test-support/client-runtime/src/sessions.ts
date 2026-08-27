@@ -197,7 +197,7 @@ export class TestSessions implements ISessions {
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
-    method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
+    method: 'create' | 'open' | 'acquire' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
       | 'clear' | 'refresh' | 'search' | 'fork'
     args: unknown[]
   }[] = []
@@ -359,6 +359,44 @@ export class TestSessions implements ISessions {
   }
 
   /**
+   * Register a per-session standard-props provider (production `provide`
+   * contract: hooks become `use<Name>` selector hooks on the render side,
+   * props spread verbatim; duplicate names fail loud at materialization).
+   * @param descriptor - static member roster plus per-session resolver.
+   * @returns disposer removing the provider.
+   */
+  provide(descriptor: SessionProvideDescriptor): () => void {
+    return this.channel.provide(descriptor)
+  }
+
+  /**
+   * Resolve the definite per-session standard-props bundle (host face member).
+   * @param id - session id.
+   * @returns the identity-stable bundle, or undefined for unknown sessions.
+   */
+  provideInfo(id: string): SessionProvideInfo | undefined {
+    const record = this.records.get(id as SessionId)
+    if (record === undefined) return undefined
+    record.provideInfo ??= this.channel.materializeInfo(this.bindingOf(id as SessionId, record))
+    return record.provideInfo
+  }
+
+  /** Production-name alias used by the renderer host for addressed panes. */
+  renderProvideInfo(id: string): SessionProvideInfo | undefined {
+    return this.provideInfo(id)
+  }
+
+  /**
+   * Resolve the current-session-optional standard kit (host face member):
+   * unknown or absent ids return the static no-session projection.
+   * @param id - current session id, when selected.
+   * @returns a definite or no-session provide bundle.
+   */
+  maybeProvideInfo(id: string | undefined): SessionMaybeProvideInfo {
+    return (id === undefined ? undefined : this.provideInfo(id)) ?? this.channel.maybeInfo
+  }
+
+  /**
    * Resolve (mint on first touch) the session-scoped Cordis context through
    * the production `createScope`, so real `scopeOf`/scope-addressed services
    * resolve it.
@@ -386,6 +424,12 @@ export class TestSessions implements ISessions {
     if (record === undefined) return undefined
     record.binding ??= this.bindingOf(id as SessionId, record)
     return record.binding
+  }
+
+  /** Retain one addressed fixture view; unknown persisted ids stay unavailable. */
+  acquire(id: SessionId): () => void {
+    this.calls.push({ method: 'acquire', args: [id] })
+    return () => {}
   }
 
   /**

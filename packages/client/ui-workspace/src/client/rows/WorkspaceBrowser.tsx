@@ -262,6 +262,8 @@ type SessionTreeProps = Pick<
   onSessionArchive: (sessionId: SessionNode['id']) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
+  /** Render non-Session actor rows at a Workspace or archive placement. */
+  renderActors: WorkspaceBrowserProps['renderSlot']
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -271,6 +273,7 @@ function SessionTree({
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
+  renderActors,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const pendingInteractions = useSessionPendingInteraction(s => s)
@@ -581,9 +584,13 @@ function SessionTree({
                     : t('sessions.expand', { n: collapsed.hiddenCount })}
                 </button>
               )}
+              {group.workspaceId !== undefined && renderActors('sidebar.workspaces.actor', {
+                mode: 'workspace', workspaceId: group.workspaceId,
+              })}
             </div>
           )
         })}
+        {renderActors('sidebar.workspaces.actor', { mode: 'archived' })}
       </div>
       <span className={css.fade} />
     </div>
@@ -592,9 +599,15 @@ function SessionTree({
 
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
+<<<<<<< HEAD:packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx
   useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive,
   archivedSessionIds,
   orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
+=======
+  useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds,
+  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
+  renderActors, t,
+>>>>>>> abc9c2b937 (feat(console): add tmux-backed human terminals):packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx
 }: Pick<
   SessionTreeProps,
   | 'useSessions'
@@ -609,6 +622,7 @@ function FlatList({
   | 'sessionUpdatedAtByAccount'
   | 'syncSessionOrderAccount'
   | 'setSessionOrder'
+  | 'renderActors'
   | 't'
 >) {
   const list = useSessions(s => s)
@@ -707,6 +721,8 @@ function FlatList({
             />
           )
         })}
+        {renderActors('sidebar.workspaces.actor', { mode: 'flat' })}
+        {renderActors('sidebar.workspaces.actor', { mode: 'archived' })}
       </div>
       <span className={css.fade} />
     </div>
@@ -1227,6 +1243,7 @@ export function WorkspaceBrowser({
                 sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
                 syncSessionOrderAccount={actions.syncSessionOrderAccount}
                 setSessionOrder={actions.setSessionOrder}
+                renderActors={renderSlot}
                 t={t}
               />
             )
@@ -1250,6 +1267,7 @@ export function WorkspaceBrowser({
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}
+                renderActors={renderSlot}
                 home={home}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {

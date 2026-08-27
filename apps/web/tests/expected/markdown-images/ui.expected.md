@@ -1,3 +1,7 @@
+- text: Agent Markdown image policy
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Markdown image policy" [disabled]

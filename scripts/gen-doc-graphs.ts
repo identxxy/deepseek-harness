@@ -488,7 +488,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'console',
     title: 'Host-owned interactive console sessions',
     mode: 'seam',
-    implementations: ['console-local'],
+    implementations: ['console-tmux'],
     consumers: ['console-remote'],
     note: 'Host-owned interactive sessions use capability authorization and raw-byte cursors; they remain separate from model-owned ctx.terminals sessions.',
   },

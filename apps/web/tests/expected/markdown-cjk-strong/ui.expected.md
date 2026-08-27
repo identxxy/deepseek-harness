@@ -1,3 +1,7 @@
+- text: Agent CJK strong emphasis
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "CJK strong emphasis" [disabled]

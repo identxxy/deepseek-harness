@@ -1,17 +1,39 @@
-/** Public type vocabulary for host-owned console sessions. @module @deepseek-ai/dsh-console/src/types */
+/** Public type vocabulary for durable Human Terminals and ephemeral attachments. @module @deepseek-ai/dsh-console/src/types */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
-/** Opaque identity of one console session. */
+/** Opaque identity of one durable Human Terminal workload. */
 export type ConsoleId = Branded<'ConsoleId'>
-/** Unforgeable bearer capability authorizing one console session. */
-export type ConsoleCapability = Branded<'ConsoleCapability'>
+/**
+ * Brand one serialized Console identity.
+ * @param value - Serialized Console identity.
+ * @returns The branded identity.
+ */
+export const ConsoleId = (value: string): ConsoleId => value as ConsoleId
 
-/** Authorized reference to one console session. */
-export interface ConsoleAccess {
-  readonly consoleId: ConsoleId
-  readonly capability: ConsoleCapability
+/** Opaque identity of one ephemeral Console attachment. */
+export type ConsoleAttachmentId = Branded<'ConsoleAttachmentId'>
+/**
+ * Brand one serialized Console attachment identity.
+ * @param value - Serialized attachment identity.
+ * @returns The branded identity.
+ */
+export const ConsoleAttachmentId = (value: string): ConsoleAttachmentId => value as ConsoleAttachmentId
+
+/** Unforgeable bearer capability authorizing one ephemeral Console attachment. */
+export type ConsoleAttachmentCapability = Branded<'ConsoleAttachmentCapability'>
+/**
+ * Brand one serialized Console attachment capability.
+ * @param value - Serialized attachment capability.
+ * @returns The branded capability.
+ */
+export const ConsoleAttachmentCapability = (value: string): ConsoleAttachmentCapability => value as ConsoleAttachmentCapability
+
+/** Authorized reference to one ephemeral attachment; the Console identity alone grants no terminal I/O. */
+export interface ConsoleAttachmentAccess {
+  readonly attachmentId: ConsoleAttachmentId
+  readonly capability: ConsoleAttachmentCapability
 }
 
 /** Positive terminal dimensions. */
@@ -20,37 +42,55 @@ export interface ConsoleSize {
   readonly cols: number
 }
 
-/** Closed signal set accepted by the subprocess terminal primitive. */
-export type ConsoleSignal = 'SIGINT' | 'SIGTERM' | 'SIGKILL' | 'SIGTSTP' | 'SIGHUP'
-
-/** Current console process state. */
+/** Durable workload availability observed by the current Host process. */
 export type ConsoleStatus =
   | { readonly kind: 'running' }
-  | { readonly kind: 'exited'; readonly exitCode: number | null; readonly signal: NodeJS.Signals | null }
-  | { readonly kind: 'failed'; readonly message: string }
+  | { readonly kind: 'ended'; readonly reason: 'external' }
 
-/** Request to open the configured human shell in one workspace. */
-export interface HumanShellOpenRequest {
-  readonly workspaceId: WorkspaceId
-  readonly size: ConsoleSize
-}
-
-/** Public console state; bearer capabilities are never projected here. */
+/** Public durable Console state; provider coordinates and attachment capabilities are excluded. */
 export interface ConsoleSnapshot {
   readonly id: ConsoleId
   readonly workspaceId: WorkspaceId
   readonly cwd: string
-  readonly pid: number
-  readonly size: ConsoleSize
+  readonly title: string
+  readonly createdAt: string
+  readonly archived: boolean
   readonly status: ConsoleStatus
+}
+
+/** Create one durable Human Terminal in a registered Workspace. */
+export interface ConsoleCreateRequest {
+  readonly workspaceId: WorkspaceId
+  readonly title: string
+  readonly initialSize: ConsoleSize
+}
+
+/** Attach one new Web terminal Client to a running Console. */
+export interface ConsoleAttachRequest {
+  readonly consoleId: ConsoleId
+  readonly size: ConsoleSize
+}
+
+/** Current ephemeral attachment process state. */
+export type ConsoleAttachmentStatus =
+  | { readonly kind: 'running' }
+  | { readonly kind: 'exited'; readonly exitCode: number | null; readonly signal: NodeJS.Signals | null }
+  | { readonly kind: 'failed'; readonly message: string }
+
+/** Public attachment state; the bearer capability is never projected here. */
+export interface ConsoleAttachmentSnapshot {
+  readonly id: ConsoleAttachmentId
+  readonly consoleId: ConsoleId
+  readonly size: ConsoleSize
+  readonly status: ConsoleAttachmentStatus
   readonly oldestOutputByte: number
   readonly nextOutputByte: number
 }
 
-/** Result of opening a console. */
-export interface ConsoleOpenResult {
-  readonly access: ConsoleAccess
-  readonly console: ConsoleSnapshot
+/** Newly published attachment and its in-memory authorization. */
+export interface ConsoleAttachmentOpenResult {
+  readonly access: ConsoleAttachmentAccess
+  readonly attachment: ConsoleAttachmentSnapshot
 }
 
 /** Offset-based bounded output read. */
@@ -64,25 +104,25 @@ export type ConsoleOutputRead =
   }
   | { readonly kind: 'gap'; readonly oldestByte: number; readonly nextByte: number }
 
-/** Atomic console state and output observation returned by a long-poll wait. */
+/** Atomic attachment state and output observation returned by a long-poll wait. */
 export interface ConsoleOutputObservation {
-  readonly console: ConsoleSnapshot
+  readonly attachment: ConsoleAttachmentSnapshot
   readonly output: ConsoleOutputRead
 }
 
-/** Successful foreground-process-group signal delivery. */
-export interface ConsoleSignalResult {
-  readonly delivered: true
-  readonly targetPgid: number
-}
-
-/** Stable programmatic console failure codes. */
+/** Stable programmatic Console failure codes. */
 export type ConsoleErrorCode =
   | 'ACCESS_DENIED'
+  | 'UNKNOWN_CONSOLE'
   | 'UNKNOWN_WORKSPACE'
   | 'WORKSPACE_UNAVAILABLE'
-  | 'CONSOLE_CLOSING'
-  | 'CONSOLE_EXITED'
+  | 'CONSOLE_ARCHIVED'
+  | 'CONSOLE_ENDED'
+  | 'CONSOLE_TERMINATING'
+  | 'ATTACHMENT_CLOSING'
+  | 'ATTACHMENT_EXITED'
   | 'SERVICE_DISPOSING'
   | 'INVALID_CURSOR'
   | 'OUTPUT_WAITER_LIMIT'
+  | 'RESOURCE_LIMIT'
+  | 'PROVIDER_FAILURE'

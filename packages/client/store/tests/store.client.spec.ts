@@ -150,6 +150,7 @@ describe('createSnapshotStore', () => {
     expect(revived.getSnapshot().a.n).toBe(42)
   })
 
+packages/client/store/tests/store.client.spec.ts
   it('reports rehydration failures without preventing store creation', () => {
     const failure = new Error('storage read failed')
     vi.stubGlobal('localStorage', {
@@ -183,8 +184,7 @@ describe('createSnapshotStore', () => {
     expect(report).toHaveBeenCalledWith(
       "snapshot store 'spec-broken-write' persistence failed:",
       failure,
-    )
-  })
+    )  })
 })
 
 describe('defineStore', () => {

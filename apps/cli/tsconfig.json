@@ -70,6 +70,12 @@
     },
     {
       "path": "../../packages/shell/tool-bash"
+    },
+    {
+      "path": "../../packages/console/console"
+    },
+    {
+      "path": "../../packages/console/console-tmux"
     }
   ]
 }

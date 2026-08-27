@@ -1,3 +1,6 @@
+- text: Agent Use the bash tool to
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "Use the bash tool to" [disabled]

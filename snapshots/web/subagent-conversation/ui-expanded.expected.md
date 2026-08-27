@@ -1,3 +1,7 @@
+- text: Agent event-sourcing researcher
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Ask a research subagent to"

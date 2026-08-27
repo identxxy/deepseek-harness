@@ -1,3 +1,6 @@
+- text: Agent Reply with a one-sentence description
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "Reply with a one-sentence description" [disabled]

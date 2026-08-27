@@ -16,6 +16,14 @@
   transition: none;
 }
 
+/* Single-pane navigation hides the inactive destination immediately, so a
+   desktop column transition has no visible surface to animate. Keeping the
+   interpolation would briefly combine an old sidebar track with the new
+   viewport-width center and place controls outside the viewport. */
+.frame[data-mobile-view] {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .frame {
     transition: none;
@@ -36,6 +44,125 @@
   overflow: hidden;
 }
 
+.paneSplit {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.paneDivider {
+  z-index: 1;
+  touch-action: none;
+  background: var(--dsw-alias-border-l2);
+}
+
+.paneDivider[data-direction='horizontal'] {
+  cursor: col-resize;
+}
+
+.paneDivider[data-direction='vertical'] {
+  cursor: row-resize;
+}
+
+.paneDivider:hover {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.actorPane {
+  display: grid;
+  grid-template-rows: 34px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+}
+
+.actorPane[data-active] {
+  outline-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, transparent);
+}
+
+.actorPane[data-implicit-empty] {
+  grid-template-rows: 0 minmax(0, 1fr);
+}
+
+.actorPane[data-implicit-empty] .paneHeader {
+  visibility: hidden;
+  overflow: hidden;
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px 0 11px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.paneKind {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.paneTitle {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paneActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.paneActions button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.paneActions button:hover {
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+}
+
+.paneBody {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.paneUnavailable {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+}
+
 .detailsCol {
   min-width: 0;
   overflow: hidden;
@@ -51,6 +178,16 @@
 /* A zero-width mobile destination must not leave its one-pixel desktop seam. */
 .frame[data-mobile-view='conversation'] .sidebarCol {
   border-right: none;
+}
+
+/* Keep the inactive mobile destination at viewport width so mounted view
+   state does not reflow through a zero-width scrollport. Visibility removes
+   it from hit testing and the accessibility tree while the grid track clips
+   it outside the active destination. */
+.frame[data-mobile-view='sessions'] .centerCol,
+.frame[data-mobile-view='conversation'] .sidebarCol {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Drag handles are frame children (columns clip overflow): an 8px hit strip

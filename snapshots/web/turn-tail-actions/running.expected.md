@@ -1,3 +1,6 @@
+- text: Agent Begin your reply with the
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "Begin your reply with the" [disabled]

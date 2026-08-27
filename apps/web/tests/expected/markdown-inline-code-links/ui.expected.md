@@ -1,3 +1,7 @@
+- text: Agent Inline code links
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Inline code links" [disabled]

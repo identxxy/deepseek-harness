@@ -1,3 +1,6 @@
+- text: Agent Use the ask_user_question tool to
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "Use the ask_user_question tool to" [disabled]

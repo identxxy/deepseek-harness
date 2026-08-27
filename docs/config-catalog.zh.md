@@ -358,6 +358,22 @@ export interface Config {
 
 来源：[`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-console"></a>
+
+## `@deepseek-ai/dsh-client-ui-console`
+
+需要：`webServer`
+
+```ts config-catalog
+/** Deployment configuration shared by the Host bootstrap and browser plugin. */
+export interface Config {
+  /** Bounded interval between durable Console catalog refreshes. */
+  readonly catalogRefreshIntervalMs: number
+}
+```
+
+来源：[`packages/client/ui-console/src/config.ts:4`](../packages/client/ui-console/src/config.ts)
+
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-code-runtime-worker-thread`
@@ -461,34 +477,6 @@ export interface ToolResultPruneConfig {
 
 来源：[`packages/compaction/compaction-tool-result-pruner/src/types.ts:4`](../packages/compaction/compaction-tool-result-pruner/src/types.ts)
 
-<a id="deepseek-aidsh-console-local"></a>
-
-## `@deepseek-ai/dsh-console-local`
-
-需要：`workspaceRegistry` · `subprocess`
-
-```ts config-catalog
-/** Fully explicit local console provider configuration. */
-export interface Config {
-  /** Interactive shell executable resolved at service initialization. */
-  shellPath: string
-  /** Arguments appended to the resolved shell executable. */
-  shellArgs: string[]
-  /** `TERM` value supplied as the only explicit child environment entry. */
-  term: string
-  /** Positive terminal-session termination grace in milliseconds. */
-  disposeGraceMs: number
-  /** Maximum number of raw terminal output bytes retained in memory. */
-  outputRetentionBytes: number
-  /** Maximum number of retained bytes returned by one output read. */
-  maxReadBytes: number
-  /** Maximum simultaneous output waiters admitted for one console. */
-  maxOutputWaitersPerConsole: number
-}
-```
-
-来源：[`packages/console/console-local/src/config.ts:2`](../packages/console/console-local/src/config.ts)
-
 <a id="deepseek-aidsh-console-remote"></a>
 
 ## `@deepseek-ai/dsh-console-remote`
@@ -502,10 +490,63 @@ export interface Config {
   readonly maxPollWaitMs: number
   /** Maximum UTF-8 byte length accepted for one write. */
   readonly maxWriteBytes: number
+  /** Maximum UTF-8 byte length accepted for one Console title. */
+  readonly maxTitleBytes: number
 }
 ```
 
-来源：[`packages/console/console-remote/src/index.ts:18`](../packages/console/console-remote/src/index.ts)
+来源：[`packages/console/console-remote/src/index.ts:26`](../packages/console/console-remote/src/index.ts)
+
+<a id="deepseek-aidsh-console-tmux"></a>
+
+## `@deepseek-ai/dsh-console-tmux`
+
+需要：`workspaceRegistry` · `subprocess`
+
+```ts config-catalog
+/** Fully explicit tmux Console provider configuration. */
+export interface Config {
+  /** tmux executable resolved at service initialization. */
+  tmuxPath: string
+  /** Dedicated tmux socket name; the default user server is never used. */
+  serverName: string
+  /** Interactive shell executable resolved at service initialization. */
+  shellPath: string
+  /** Must be empty: tmux accepts one shell-command string rather than an argv vector. */
+  shellArgs: string[]
+  /** TERM value advertised by Web attachment PTYs. */
+  term: string
+  /** tmux window-size policy for concurrent Clients. */
+  windowSizePolicy: WindowSizePolicy
+  /** Maximum wall time for one non-interactive tmux command. */
+  commandTimeoutMs: number
+  /** Termination and output-drain grace for one non-interactive tmux command. */
+  commandGraceMs: number
+  /** Maximum stdout or stderr bytes retained for one non-interactive tmux command. */
+  commandOutputBytes: number
+  /** Termination grace for one Web attachment tmux Client. */
+  attachmentGraceMs: number
+  /** Idle lifetime of a disconnected Web attachment. */
+  attachmentIdleTtlMs: number
+  /** Interval between bounded catalog reconciliations. */
+  reconcileIntervalMs: number
+  /** Maximum terminal output bytes retained for one attachment. */
+  outputRetentionBytes: number
+  /** Maximum retained bytes returned by one output read. */
+  maxReadBytes: number
+  /** Maximum simultaneous output waiters for one attachment. */
+  maxOutputWaitersPerAttachment: number
+  /** Maximum durable Consoles admitted by this provider. */
+  maxConsoles: number
+  /** Maximum concurrent Web attachments admitted for one Console. */
+  maxAttachmentsPerConsole: number
+}
+
+/** tmux policy used when attached Clients report different terminal sizes. */
+export type WindowSizePolicy = 'largest' | 'smallest' | 'latest'
+```
+
+来源：[`packages/console/console-tmux/src/config.ts:5`](../packages/console/console-tmux/src/config.ts)
 
 <a id="deepseek-aidsh-cordis-host-runner"></a>
 

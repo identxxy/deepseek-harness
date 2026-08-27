@@ -673,6 +673,173 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+<<<<<<< HEAD
+=======
+    key: 'consoleRemote',
+    summary: 'Remote Console catalog, lifecycle, attachment, and terminal I/O operations under the `consoles` wire namespace.',
+    description: 'Remote Console catalog, lifecycle, attachment, and terminal I/O operations under the `consoles` wire namespace.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') async list(): Promise<ConsoleRemoteResult<readonly ConsoleRemoteSnapshot[]>>',
+        description: 'List the complete durable Console catalog.',
+        parameters: [],
+        returns: 'The catalog or a provider business failure.',
+      },
+      {
+        signature: '@Remote(\'create\') async create(request: ConsoleRemoteCreateRequest, signal: AbortSignal): Promise<ConsoleRemoteResult<ConsoleRemoteSnapshot>>',
+        description: 'Create one durable Console through the authorized carrier.',
+        parameters: [{ name: 'request', description: 'Workspace, title, and initial dimensions.' }, { name: 'signal', description: 'Carrier cancellation.' }],
+        returns: 'The durable Console or a business failure.',
+      },
+      {
+        signature: '@Remote(\'snapshot\') snapshot(request: ConsoleRemoteIdRequest): ConsoleRemoteResult<ConsoleRemoteSnapshot>',
+        description: 'Read the current public state of one Console.',
+        parameters: [{ name: 'request', description: 'Durable Console identity.' }],
+        returns: 'Its current state or a business failure.',
+      },
+      {
+        signature: '@Remote(\'rename\') async rename(request: ConsoleRemoteRenameRequest): Promise<ConsoleRemoteResult<ConsoleRemoteSnapshot>>',
+        description: 'Replace one Console\'s display title.',
+        parameters: [{ name: 'request', description: 'Console identity and replacement title.' }],
+        returns: 'State after metadata durability or a business failure.',
+      },
+      {
+        signature: '@Remote(\'setArchived\') async setArchived(request: ConsoleRemoteArchiveRequest): Promise<ConsoleRemoteResult<ConsoleRemoteSnapshot>>',
+        description: 'Archive or restore one durable Console.',
+        parameters: [{ name: 'request', description: 'Console identity and desired archive state.' }],
+        returns: 'State after metadata durability or a business failure.',
+      },
+      {
+        signature: '@Remote(\'attach\') async attach( request: ConsoleRemoteAttachRequest, signal: AbortSignal, ): Promise<ConsoleRemoteResult<ConsoleRemoteAttachmentOpenResult>>',
+        description: 'Start one ephemeral terminal Client for a running Console.',
+        parameters: [{ name: 'request', description: 'Running Console and initial attachment dimensions.' }, { name: 'signal', description: 'Carrier cancellation.' }],
+        returns: 'A new authorized attachment or a business failure.',
+      },
+      {
+        signature: '@Remote(\'attachmentSnapshot\') attachmentSnapshot(request: ConsoleRemoteAttachmentAccessRequest): ConsoleRemoteResult<ConsoleRemoteAttachmentSnapshot>',
+        description: 'Read one authorized attachment\'s current state.',
+        parameters: [{ name: 'request', description: 'Authorized attachment reference.' }],
+        returns: 'Its current state or a business failure.',
+      },
+      {
+        signature: '@Remote(\'read\') async read(request: ConsoleRemoteReadRequest, signal: AbortSignal): Promise<ConsoleRemoteResult<ConsoleRemoteObservation>>',
+        description: 'Read immediately or wait once for attachment output or state.',
+        parameters: [{ name: 'request', description: 'Authorized cursor and requested wait.' }, { name: 'signal', description: 'Carrier cancellation.' }],
+        returns: 'A bounded observation or business failure.',
+      },
+      {
+        signature: '@Remote(\'write\') async write(request: ConsoleRemoteWriteRequest, signal?: AbortSignal): Promise<ConsoleRemoteResult<null>>',
+        description: 'Write bounded UTF-8 terminal input to one attachment.',
+        parameters: [{ name: 'request', description: 'Authorized terminal input.' }, { name: 'signal', description: 'Carrier cancellation.' }],
+        returns: 'Completion or a business failure.',
+      },
+      {
+        signature: '@Remote(\'resize\') async resize(request: ConsoleRemoteResizeRequest, signal?: AbortSignal): Promise<ConsoleRemoteResult<null>>',
+        description: 'Resize one authorized terminal attachment.',
+        parameters: [{ name: 'request', description: 'Authorized attachment dimensions.' }, { name: 'signal', description: 'Carrier cancellation.' }],
+        returns: 'Completion or a business failure.',
+      },
+      {
+        signature: '@Remote(\'detach\') async detach(request: ConsoleRemoteAttachmentAccessRequest): Promise<ConsoleRemoteResult<null>>',
+        description: 'Detach one terminal Client without stopping its Console.',
+        parameters: [{ name: 'request', description: 'Authorized attachment reference.' }],
+        returns: 'Completion after only the tmux Client exits, or a business failure.',
+      },
+      {
+        signature: '@Remote(\'terminate\') async terminate(request: ConsoleRemoteIdRequest): Promise<ConsoleRemoteResult<null>>',
+        description: 'Terminate one durable Console workload explicitly.',
+        parameters: [{ name: 'request', description: 'Durable Console identity.' }],
+        returns: 'Completion after termination, or a business failure.',
+      },
+    ],
+  },
+  {
+    key: 'consoles',
+    summary: 'Abstract runtime for durable Human Terminals and their ephemeral terminal Clients.',
+    description: 'Abstract runtime for durable Human Terminals and their ephemeral terminal Clients.',
+    methods: [
+      {
+        signature: 'abstract list(): Promise<readonly ConsoleSnapshot[]>',
+        description: 'List every durable Console known to this provider.',
+        parameters: [],
+        returns: 'The current catalog, including archived and ended records.',
+      },
+      {
+        signature: 'abstract snapshot(consoleId: ConsoleId): ConsoleSnapshot',
+        description: 'Read one Console from the current catalog.',
+        parameters: [{ name: 'consoleId', description: 'Durable Console identity.' }],
+        returns: 'Its current public state.',
+      },
+      {
+        signature: 'abstract create(request: ConsoleCreateRequest, signal?: AbortSignal): Promise<ConsoleSnapshot>',
+        description: 'Create and publish one durable Console workload.',
+        parameters: [{ name: 'request', description: 'Workspace, title, and initial tmux dimensions.' }, { name: 'signal', description: 'Allocation cancellation.' }],
+        returns: 'The published durable Console.',
+      },
+      {
+        signature: 'abstract rename(consoleId: ConsoleId, title: string): Promise<ConsoleSnapshot>',
+        description: 'Replace one Console\'s display title.',
+        parameters: [{ name: 'consoleId', description: 'Durable Console identity.' }, { name: 'title', description: 'Replacement display title.' }],
+        returns: 'State after metadata durability.',
+      },
+      {
+        signature: 'abstract setArchived(consoleId: ConsoleId, archived: boolean): Promise<ConsoleSnapshot>',
+        description: 'Change whether one Console appears in the active catalog.',
+        parameters: [{ name: 'consoleId', description: 'Durable Console identity.' }, { name: 'archived', description: 'Desired catalog visibility.' }],
+        returns: 'State after metadata durability.',
+      },
+      {
+        signature: 'abstract attach(request: ConsoleAttachRequest, signal?: AbortSignal): Promise<ConsoleAttachmentOpenResult>',
+        description: 'Start one ephemeral terminal Client for a running Console.',
+        parameters: [{ name: 'request', description: 'Running Console and initial Client dimensions.' }, { name: 'signal', description: 'Allocation cancellation.' }],
+        returns: 'A newly authorized attachment.',
+      },
+      {
+        signature: 'abstract attachmentSnapshot(access: ConsoleAttachmentAccess): ConsoleAttachmentSnapshot',
+        description: 'Read one attachment\'s current process and output state.',
+        parameters: [{ name: 'access', description: 'Authorized attachment reference.' }],
+        returns: 'Fresh public attachment state.',
+      },
+      {
+        signature: 'abstract readOutput(access: ConsoleAttachmentAccess, fromByte: number): ConsoleOutputRead',
+        description: 'Read retained output immediately from one attachment.',
+        parameters: [{ name: 'access', description: 'Authorized attachment reference.' }, { name: 'fromByte', description: 'Absolute output cursor.' }],
+        returns: 'Retained bytes or an explicit retention gap.',
+      },
+      {
+        signature: 'abstract waitOutput(access: ConsoleAttachmentAccess, fromByte: number, signal: AbortSignal): Promise<ConsoleOutputObservation>',
+        description: 'Wait until one attachment has output or changes state.',
+        parameters: [{ name: 'access', description: 'Authorized attachment reference.' }, { name: 'fromByte', description: 'Absolute output cursor.' }, { name: 'signal', description: 'Cancellation for this wait.' }],
+        returns: 'Current attachment state and one output page.',
+      },
+      {
+        signature: 'abstract write(access: ConsoleAttachmentAccess, data: string): Promise<void>',
+        description: 'Write raw input to one terminal Client.',
+        parameters: [{ name: 'access', description: 'Authorized attachment reference.' }, { name: 'data', description: 'Raw terminal input.' }],
+        returns: 'After delivery to the tmux Client PTY.',
+      },
+      {
+        signature: 'abstract resize(access: ConsoleAttachmentAccess, size: ConsoleSize): Promise<void>',
+        description: 'Resize one terminal Client PTY.',
+        parameters: [{ name: 'access', description: 'Authorized attachment reference.' }, { name: 'size', description: 'New Client dimensions.' }],
+        returns: 'After PTY resize.',
+      },
+      {
+        signature: 'abstract detach(access: ConsoleAttachmentAccess): Promise<void>',
+        description: 'Detach one ephemeral terminal Client without stopping its Console.',
+        parameters: [{ name: 'access', description: 'Authorized attachment reference.' }],
+        returns: 'After the tmux Client exits; the Console workload remains alive.',
+      },
+      {
+        signature: 'abstract terminate(consoleId: ConsoleId): Promise<void>',
+        description: 'Terminate one durable Console workload and all of its attachments.',
+        parameters: [{ name: 'consoleId', description: 'Durable Console identity.' }],
+        returns: 'After provider termination and attachment quiescence.',
+      },
+    ],
+  },
+  {
+>>>>>>> abc9c2b937 (feat(console): add tmux-backed human terminals)
     key: 'credentials',
     summary: 'Abstract credential service over two key spaces that answer two questions.',
     description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name", layered over the process environment, the provider-managed store, and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
@@ -3728,6 +3895,145 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
   },
   {
+<<<<<<< HEAD
+=======
+    name: 'ConsoleAttachmentAccess',
+    declaration: 'export interface ConsoleAttachmentAccess {\n    readonly attachmentId: ConsoleAttachmentId;\n    readonly capability: ConsoleAttachmentCapability;\n}',
+  },
+  {
+    name: 'ConsoleAttachmentCapability',
+    declaration: 'export type ConsoleAttachmentCapability = Branded<\'ConsoleAttachmentCapability\'>;',
+  },
+  {
+    name: 'ConsoleAttachmentId',
+    declaration: 'export type ConsoleAttachmentId = Branded<\'ConsoleAttachmentId\'>;',
+  },
+  {
+    name: 'ConsoleAttachmentOpenResult',
+    declaration: 'export interface ConsoleAttachmentOpenResult {\n    readonly access: ConsoleAttachmentAccess;\n    readonly attachment: ConsoleAttachmentSnapshot;\n}',
+  },
+  {
+    name: 'ConsoleAttachmentSnapshot',
+    declaration: 'export interface ConsoleAttachmentSnapshot {\n    readonly id: ConsoleAttachmentId;\n    readonly consoleId: ConsoleId;\n    readonly size: ConsoleSize;\n    readonly status: ConsoleAttachmentStatus;\n    readonly oldestOutputByte: number;\n    readonly nextOutputByte: number;\n}',
+  },
+  {
+    name: 'ConsoleAttachmentStatus',
+    declaration: 'export type ConsoleAttachmentStatus = {\n    readonly kind: \'running\';\n} | {\n    readonly kind: \'exited\';\n    readonly exitCode: number | null;\n    readonly signal: NodeJS.Signals | null;\n} | {\n    readonly kind: \'failed\';\n    readonly message: string;\n};',
+  },
+  {
+    name: 'ConsoleAttachRequest',
+    declaration: 'export interface ConsoleAttachRequest {\n    readonly consoleId: ConsoleId;\n    readonly size: ConsoleSize;\n}',
+  },
+  {
+    name: 'ConsoleCreateRequest',
+    declaration: 'export interface ConsoleCreateRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly title: string;\n    readonly initialSize: ConsoleSize;\n}',
+  },
+  {
+    name: 'ConsoleId',
+    declaration: 'export type ConsoleId = Branded<\'ConsoleId\'>;',
+  },
+  {
+    name: 'ConsoleOutputObservation',
+    declaration: 'export interface ConsoleOutputObservation {\n    readonly attachment: ConsoleAttachmentSnapshot;\n    readonly output: ConsoleOutputRead;\n}',
+  },
+  {
+    name: 'ConsoleOutputRead',
+    declaration: 'export type ConsoleOutputRead = {\n    readonly kind: \'data\';\n    readonly data: Uint8Array;\n    readonly fromByte: number;\n    readonly nextByte: number;\n    readonly availableThroughByte: number;\n} | {\n    readonly kind: \'gap\';\n    readonly oldestByte: number;\n    readonly nextByte: number;\n};',
+  },
+  {
+    name: 'ConsoleRemoteArchiveRequest',
+    declaration: 'export interface ConsoleRemoteArchiveRequest {\n    readonly consoleId: string;\n    readonly archived: boolean;\n}',
+  },
+  {
+    name: 'ConsoleRemoteAttachmentAccess',
+    declaration: 'export interface ConsoleRemoteAttachmentAccess {\n    readonly attachmentId: string;\n    readonly capability: string;\n}',
+  },
+  {
+    name: 'ConsoleRemoteAttachmentAccessRequest',
+    declaration: 'export interface ConsoleRemoteAttachmentAccessRequest {\n    readonly access: ConsoleRemoteAttachmentAccess;\n}',
+  },
+  {
+    name: 'ConsoleRemoteAttachmentOpenResult',
+    declaration: 'export interface ConsoleRemoteAttachmentOpenResult {\n    readonly access: ConsoleRemoteAttachmentAccess;\n    readonly attachment: ConsoleRemoteAttachmentSnapshot;\n}',
+  },
+  {
+    name: 'ConsoleRemoteAttachmentSnapshot',
+    declaration: 'export interface ConsoleRemoteAttachmentSnapshot {\n    readonly id: string;\n    readonly consoleId: string;\n    readonly size: ConsoleRemoteSize;\n    readonly status: ConsoleRemoteAttachmentStatus;\n    readonly oldestOutputByte: number;\n    readonly nextOutputByte: number;\n}',
+  },
+  {
+    name: 'ConsoleRemoteAttachmentStatus',
+    declaration: 'export type ConsoleRemoteAttachmentStatus = {\n    readonly kind: \'running\';\n} | {\n    readonly kind: \'exited\';\n    readonly exitCode: number | null;\n    readonly signal: string | null;\n} | {\n    readonly kind: \'failed\';\n};',
+  },
+  {
+    name: 'ConsoleRemoteAttachRequest',
+    declaration: 'export interface ConsoleRemoteAttachRequest {\n    readonly consoleId: string;\n    readonly size: ConsoleRemoteSize;\n}',
+  },
+  {
+    name: 'ConsoleRemoteCreateRequest',
+    declaration: 'export interface ConsoleRemoteCreateRequest {\n    readonly workspaceId: string;\n    readonly title: string;\n    readonly initialSize: ConsoleRemoteSize;\n}',
+  },
+  {
+    name: 'ConsoleRemoteErrorCode',
+    declaration: 'export type ConsoleRemoteErrorCode = \'ACCESS_DENIED\' | \'UNKNOWN_CONSOLE\' | \'UNKNOWN_WORKSPACE\' | \'WORKSPACE_UNAVAILABLE\' | \'CONSOLE_ARCHIVED\' | \'CONSOLE_ENDED\' | \'CONSOLE_TERMINATING\' | \'ATTACHMENT_CLOSING\' | \'ATTACHMENT_EXITED\' | \'SERVICE_DISPOSING\' | \'INVALID_CURSOR\' | \'OUTPUT_WAITER_LIMIT\' | \'RESOURCE_LIMIT\' | \'PROVIDER_FAILURE\';',
+  },
+  {
+    name: 'ConsoleRemoteFailure',
+    declaration: 'export interface ConsoleRemoteFailure {\n    readonly code: ConsoleRemoteErrorCode | \'INVALID_SIZE\' | \'INVALID_WAIT_MS\' | \'INVALID_TITLE\' | \'TITLE_TOO_LARGE\' | \'WRITE_TOO_LARGE\';\n}',
+  },
+  {
+    name: 'ConsoleRemoteIdRequest',
+    declaration: 'export interface ConsoleRemoteIdRequest {\n    readonly consoleId: string;\n}',
+  },
+  {
+    name: 'ConsoleRemoteObservation',
+    declaration: 'export interface ConsoleRemoteObservation {\n    readonly attachment: ConsoleRemoteAttachmentSnapshot;\n    readonly output: ConsoleRemoteOutput;\n    readonly timedOut: boolean;\n}',
+  },
+  {
+    name: 'ConsoleRemoteOutput',
+    declaration: 'export type ConsoleRemoteOutput = {\n    readonly kind: \'data\';\n    readonly dataBase64: string;\n    readonly fromByte: number;\n    readonly nextByte: number;\n    readonly availableThroughByte: number;\n} | {\n    readonly kind: \'gap\';\n    readonly oldestByte: number;\n    readonly nextByte: number;\n};',
+  },
+  {
+    name: 'ConsoleRemoteReadRequest',
+    declaration: 'export interface ConsoleRemoteReadRequest {\n    readonly access: ConsoleRemoteAttachmentAccess;\n    readonly fromByte: number;\n    readonly waitMs: number;\n}',
+  },
+  {
+    name: 'ConsoleRemoteRenameRequest',
+    declaration: 'export interface ConsoleRemoteRenameRequest {\n    readonly consoleId: string;\n    readonly title: string;\n}',
+  },
+  {
+    name: 'ConsoleRemoteResizeRequest',
+    declaration: 'export interface ConsoleRemoteResizeRequest {\n    readonly access: ConsoleRemoteAttachmentAccess;\n    readonly size: ConsoleRemoteSize;\n}',
+  },
+  {
+    name: 'ConsoleRemoteResult',
+    declaration: 'export type ConsoleRemoteResult<T> = {\n    readonly ok: true;\n    readonly value: T;\n} | {\n    readonly ok: false;\n    readonly error: ConsoleRemoteFailure;\n};',
+  },
+  {
+    name: 'ConsoleRemoteSize',
+    declaration: 'export interface ConsoleRemoteSize {\n    readonly rows: number;\n    readonly cols: number;\n}',
+  },
+  {
+    name: 'ConsoleRemoteSnapshot',
+    declaration: 'export interface ConsoleRemoteSnapshot {\n    readonly id: string;\n    readonly workspaceId: string;\n    readonly cwd: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly archived: boolean;\n    readonly status: {\n        readonly kind: \'running\';\n    } | {\n        readonly kind: \'ended\';\n        readonly reason: \'external\';\n    };\n}',
+  },
+  {
+    name: 'ConsoleRemoteWriteRequest',
+    declaration: 'export interface ConsoleRemoteWriteRequest {\n    readonly access: ConsoleRemoteAttachmentAccess;\n    readonly data: string;\n}',
+  },
+  {
+    name: 'ConsoleSize',
+    declaration: 'export interface ConsoleSize {\n    readonly rows: number;\n    readonly cols: number;\n}',
+  },
+  {
+    name: 'ConsoleSnapshot',
+    declaration: 'export interface ConsoleSnapshot {\n    readonly id: ConsoleId;\n    readonly workspaceId: WorkspaceId;\n    readonly cwd: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly archived: boolean;\n    readonly status: ConsoleStatus;\n}',
+  },
+  {
+    name: 'ConsoleStatus',
+    declaration: 'export type ConsoleStatus = {\n    readonly kind: \'running\';\n} | {\n    readonly kind: \'ended\';\n    readonly reason: \'external\';\n};',
+  },
+  {
+>>>>>>> abc9c2b937 (feat(console): add tmux-backed human terminals)
     name: 'ContentBlockMap',
     declaration: 'export interface ContentBlockMap {\n    \'text\': TextBlock;\n    \'reasoning\': ReasoningBlock;\n    \'image\': ImageBlock;\n    \'tool-call\': ToolCallBlock;\n    \'tool-result\': ToolResultBlock;\n}',
   },

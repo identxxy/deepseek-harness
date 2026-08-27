@@ -23,16 +23,25 @@ export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
 export type {} from '@deepseek-ai/dsh-console-remote/remote'
 export type {
-  ConsoleRemoteAccessRequest,
+  ConsoleRemoteArchiveRequest,
+  ConsoleRemoteAttachRequest,
+  ConsoleRemoteAttachmentAccess,
+  ConsoleRemoteAttachmentAccessRequest,
+  ConsoleRemoteAttachmentOpenResult,
+  ConsoleRemoteAttachmentSnapshot,
+  ConsoleRemoteAttachmentStatus,
+  ConsoleRemoteCreateRequest,
+  ConsoleRemoteErrorCode,
   ConsoleRemoteFailure,
+  ConsoleRemoteIdRequest,
   ConsoleRemoteObservation,
   ConsoleRemoteOutput,
   ConsoleRemoteReadRequest,
+  ConsoleRemoteRenameRequest,
   ConsoleRemoteResizeRequest,
   ConsoleRemoteResult,
-  ConsoleRemoteSignalRequest,
+  ConsoleRemoteSize,
   ConsoleRemoteSnapshot,
-  ConsoleRemoteStatus,
   ConsoleRemoteWriteRequest,
 } from '@deepseek-ai/dsh-console-remote/types'
 export type {} from '@deepseek-ai/dsh-goal/remote'

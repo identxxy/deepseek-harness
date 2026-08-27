@@ -1,3 +1,6 @@
+- text: Agent Reply with the single word
+- button "Split right": ⇥
+- button "Split down": ⇲
 - banner:
   - navigation "Session hierarchy":
     - button "Reply with the single word" [disabled]

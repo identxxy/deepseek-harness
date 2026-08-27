@@ -1910,6 +1910,26 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     updatedAt: fixtureEpoch,
   }]
   let nextWorkspace = 1
+  type FxConsole = {
+    id: string
+    workspaceId: string
+    cwd: string
+    title: string
+    createdAt: string
+    archived: boolean
+    status: { kind: 'running' } | { kind: 'ended'; reason: 'external' }
+  }
+  type FxConsoleAccess = { attachmentId: string; capability: string }
+  type FxConsoleAttachment = {
+    access: FxConsoleAccess
+    consoleId: string
+    size: { rows: number; cols: number }
+    output: string
+  }
+  const consoles: FxConsole[] = []
+  const consoleAttachments = new Map<string, FxConsoleAttachment>()
+  let nextConsole = 1
+  let nextConsoleAttachment = 1
   // Registry-global archive set mirroring the host: archived sessions keep
   // their workspace accounting slot and only grouping surfaces hide them.
   const archivedSessionIds: SessionId[] = []
@@ -2367,6 +2387,143 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         kind: 'goal/change', version: 1, operation: 'clear', cleared: tombstone, clearedAt: Date.now(),
       })
       return { ok: true, value: tombstone }
+    },
+  }
+
+  const consoleSuccess = <T>(value: T): RpcResult<{ ok: true; value: T }> => ({
+    ok: true,
+    value: { ok: true, value },
+  })
+  const consoleFailure = (code: string): RpcResult<{ ok: false; error: { code: string } }> => ({
+    ok: true,
+    value: { ok: false, error: { code } },
+  })
+  const requireConsole = (consoleId: string): FxConsole | undefined => consoles.find(item => item.id === consoleId)
+  const requireConsoleAttachment = (access: FxConsoleAccess): FxConsoleAttachment | undefined => {
+    const attachment = consoleAttachments.get(access.attachmentId)
+    return attachment?.access.capability === access.capability ? attachment : undefined
+  }
+  const encodeBase64 = (value: string): string => btoa(value)
+  const attachmentSnapshot = (attachment: FxConsoleAttachment) => ({
+    id: attachment.access.attachmentId,
+    consoleId: attachment.consoleId,
+    size: attachment.size,
+    status: requireConsole(attachment.consoleId)?.status.kind === 'ended'
+      ? { kind: 'exited' as const, exitCode: 0, signal: null }
+      : { kind: 'running' as const },
+    oldestOutputByte: 0,
+    nextOutputByte: attachment.output.length,
+  })
+  const consoleRemotes = {
+    list: () => consoleSuccess(consoles),
+    create(request: { workspaceId: string; title: string; initialSize: { rows: number; cols: number } }) {
+      const workspace = workspaces.find(item => item.workspaceId === request.workspaceId)
+      if (workspace === undefined) return consoleFailure('UNKNOWN_WORKSPACE')
+      const item: FxConsole = {
+        id: `fx-console-${nextConsole++}`,
+        workspaceId: request.workspaceId,
+        cwd: workspace.path,
+        title: request.title,
+        createdAt: '2026-08-26T00:00:00.000Z',
+        archived: false,
+        status: { kind: 'running' },
+      }
+      consoles.unshift(item)
+      return consoleSuccess(item)
+    },
+    snapshot(request: { consoleId: string }) {
+      const item = requireConsole(request.consoleId)
+      return item === undefined ? consoleFailure('UNKNOWN_CONSOLE') : consoleSuccess(item)
+    },
+    rename(request: { consoleId: string; title: string }) {
+      const item = requireConsole(request.consoleId)
+      if (item === undefined) return consoleFailure('UNKNOWN_CONSOLE')
+      item.title = request.title
+      return consoleSuccess(item)
+    },
+    setArchived(request: { consoleId: string; archived: boolean }) {
+      const item = requireConsole(request.consoleId)
+      if (item === undefined) return consoleFailure('UNKNOWN_CONSOLE')
+      item.archived = request.archived
+      return consoleSuccess(item)
+    },
+    attach(request: { consoleId: string; size: { rows: number; cols: number } }) {
+      const item = requireConsole(request.consoleId)
+      if (item === undefined) return consoleFailure('UNKNOWN_CONSOLE')
+      if (item.archived) return consoleFailure('CONSOLE_ARCHIVED')
+      const index = nextConsoleAttachment++
+      const attachment: FxConsoleAttachment = {
+        access: { attachmentId: `fx-console-attachment-${index}`, capability: `fx-console-capability-${index}` },
+        consoleId: item.id,
+        size: request.size,
+        output: 'fixture terminal ready\r\n$ ',
+      }
+      consoleAttachments.set(attachment.access.attachmentId, attachment)
+      return consoleSuccess({ access: attachment.access, attachment: attachmentSnapshot(attachment) })
+    },
+    attachmentSnapshot(request: { access: FxConsoleAccess }) {
+      const attachment = requireConsoleAttachment(request.access)
+      return attachment === undefined ? consoleFailure('ACCESS_DENIED') : consoleSuccess(attachmentSnapshot(attachment))
+    },
+    async read(request: { access: FxConsoleAccess; fromByte: number; waitMs: number }, signal: AbortSignal) {
+      const attachment = requireConsoleAttachment(request.access)
+      if (attachment === undefined) return consoleFailure('ACCESS_DENIED')
+      const observe = (timedOut: boolean) => consoleSuccess({
+        attachment: attachmentSnapshot(attachment),
+        output: {
+          kind: 'data' as const,
+          dataBase64: encodeBase64(attachment.output.slice(request.fromByte)),
+          fromByte: request.fromByte,
+          nextByte: attachment.output.length,
+          availableThroughByte: attachment.output.length,
+        },
+        timedOut,
+      })
+      if (request.fromByte < attachment.output.length) return observe(false)
+      await new Promise<void>((resolve, reject) => {
+        const onAbort = (): void => {
+          clearTimeout(timer)
+          reject(signal.reason instanceof Error
+            ? signal.reason
+            : new Error('Console read aborted', { cause: signal.reason }))
+        }
+        const timer = setTimeout(() => {
+          signal.removeEventListener('abort', onAbort)
+          resolve()
+        }, Math.min(request.waitMs, 50))
+        signal.addEventListener('abort', onAbort, { once: true })
+      })
+      return observe(true)
+    },
+    write(request: { access: FxConsoleAccess; data: string }) {
+      const attachment = requireConsoleAttachment(request.access)
+      if (attachment === undefined) return consoleFailure('ACCESS_DENIED')
+      const item = requireConsole(attachment.consoleId)
+      if (item === undefined) return consoleFailure('UNKNOWN_CONSOLE')
+      if (request.data.includes('\x04')) item.status = { kind: 'ended', reason: 'external' }
+      else attachment.output += request.data
+      return consoleSuccess(null)
+    },
+    resize(request: { access: FxConsoleAccess; size: { rows: number; cols: number } }) {
+      const attachment = requireConsoleAttachment(request.access)
+      if (attachment === undefined) return consoleFailure('ACCESS_DENIED')
+      attachment.size = request.size
+      return consoleSuccess(null)
+    },
+    detach(request: { access: FxConsoleAccess }) {
+      const attachment = requireConsoleAttachment(request.access)
+      if (attachment === undefined) return consoleFailure('ACCESS_DENIED')
+      consoleAttachments.delete(attachment.access.attachmentId)
+      return consoleSuccess(null)
+    },
+    terminate(request: { consoleId: string }) {
+      const index = consoles.findIndex(item => item.id === request.consoleId)
+      if (index === -1) return consoleFailure('UNKNOWN_CONSOLE')
+      consoles.splice(index, 1)
+      for (const [id, attachment] of consoleAttachments) {
+        if (attachment.consoleId === request.consoleId) consoleAttachments.delete(id)
+      }
+      return consoleSuccess(null)
     },
   }
 
@@ -3394,12 +3551,14 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
 
   const rpc: ClientConnectionRpc = {
     call(channel, endpoint, payload, signal) {
+
       if (channel !== '/api') {
         return Promise.reject(new Error(`fixture connection RPC channel ${JSON.stringify(channel)} is unavailable`))
       }
       const args = (payload as {
         args: Readonly<{
           agentId: SessionId
+
           line?: string
           query?: string
           path?: string
@@ -3421,6 +3580,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       const sessionId = args.agentId
       const callSignal = signal ?? new AbortController().signal
       const request = args.request
+
       switch (endpoint) {
         case 'commands/list': return Promise.resolve(commandRemotes.list(sessionId))
         case 'commands/execute': return Promise.resolve(commandRemotes.execute(sessionId, args.line as string, args.images ?? []))
@@ -3572,6 +3732,19 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           request as WorkspaceInsertSessionBeforeRequest,
         )
         case 'workspace/archiveSession': return workspaceApi.archiveSession(request as WorkspaceArchiveSessionRequest)
+        case 'consoles/list': return Promise.resolve(consoleRemotes.list())
+        case 'consoles/create': return Promise.resolve(consoleRemotes.create(args.request as Parameters<typeof consoleRemotes.create>[0]))
+        case 'consoles/snapshot': return Promise.resolve(consoleRemotes.snapshot(args.request as Parameters<typeof consoleRemotes.snapshot>[0]))
+        case 'consoles/rename': return Promise.resolve(consoleRemotes.rename(args.request as Parameters<typeof consoleRemotes.rename>[0]))
+        case 'consoles/setArchived': return Promise.resolve(consoleRemotes.setArchived(args.request as Parameters<typeof consoleRemotes.setArchived>[0]))
+        case 'consoles/attach': return Promise.resolve(consoleRemotes.attach(args.request as Parameters<typeof consoleRemotes.attach>[0]))
+        case 'consoles/attachmentSnapshot': return Promise.resolve(consoleRemotes.attachmentSnapshot(args.request as Parameters<typeof consoleRemotes.attachmentSnapshot>[0]))
+        case 'consoles/read': return consoleRemotes.read(args.request as Parameters<typeof consoleRemotes.read>[0], callSignal)
+        case 'consoles/write': return Promise.resolve(consoleRemotes.write(args.request as Parameters<typeof consoleRemotes.write>[0]))
+        case 'consoles/resize': return Promise.resolve(consoleRemotes.resize(args.request as Parameters<typeof consoleRemotes.resize>[0]))
+        case 'consoles/detach': return Promise.resolve(consoleRemotes.detach(args.request as Parameters<typeof consoleRemotes.detach>[0]))
+        case 'consoles/terminate': return Promise.resolve(consoleRemotes.terminate(args.request as Parameters<typeof consoleRemotes.terminate>[0]))
+
         default:
           return Promise.reject(new Error(`fixture connection RPC endpoint ${JSON.stringify(endpoint)} is unavailable`))
       }

@@ -100,6 +100,28 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it('offers actor-row seats for every Workspace, the flat list, and archived actors', () => {
+    const owners: unknown[] = []
+    const renderSlot = vi.fn((name: string, owner: unknown) => {
+      if (name === 'sidebar.workspaces.actor') owners.push(owner)
+      return null
+    }) as never
+    const b = mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha', []), workspace('beta', [])])),
+      renderSlot,
+    })
+    expect([...new Map(owners.map(owner => [JSON.stringify(owner), owner])).values()]).toEqual([
+      { mode: 'workspace', workspaceId: wid('alpha') },
+      { mode: 'workspace', workspaceId: wid('beta') },
+      { mode: 'archived' },
+    ])
+
+    owners.length = 0
+    act(() => { b.store.actions.setGroupBy('flat') })
+    expect([...new Map(owners.map(owner => [JSON.stringify(owner), owner])).values()])
+      .toEqual([{ mode: 'flat' }, { mode: 'archived' }])
+  })
+
   it('workspace hover card shows a POSIX home descendant as ~', () => {
     vi.useFakeTimers()
     try {

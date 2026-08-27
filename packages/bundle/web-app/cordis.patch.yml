@@ -61,6 +61,37 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    # Durable Human Terminals live on the dedicated `tmux -L dsh` server.
+    # Windows has no native tmux provider; the Console surface is omitted there.
+    - id: console-tmux
+      name: '@deepseek-ai/dsh-console-tmux'
+      disabled: !!js process.platform === 'win32'
+      config:
+        tmuxPath: tmux
+        serverName: dsh
+        shellPath: !!js process.env.SHELL ?? '/bin/bash'
+        shellArgs: []
+        term: xterm-256color
+        windowSizePolicy: largest
+        commandTimeoutMs: 5000
+        commandGraceMs: 500
+        commandOutputBytes: 65536
+        attachmentGraceMs: 1000
+        attachmentIdleTtlMs: 120000
+        reconcileIntervalMs: 5000
+        outputRetentionBytes: 1048576
+        maxReadBytes: 65536
+        maxOutputWaitersPerAttachment: 8
+        maxConsoles: 64
+        maxAttachmentsPerConsole: 8
+
+    - id: console-remote
+      name: '@deepseek-ai/dsh-console-remote'
+      disabled: !!js process.platform === 'win32'
+      config:
+        maxPollWaitMs: 20000
+        maxWriteBytes: 65536
+        maxTitleBytes: 512
     - id: session-reference
       name: '@deepseek-ai/dsh-session-reference'
 
@@ -240,6 +271,12 @@
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    - id: ui-console
+      name: '@deepseek-ai/dsh-client-ui-console'
+      disabled: !!js process.platform === 'win32'
+      config:
+        catalogRefreshIntervalMs: 5000
 
     # Input triggers: the '/' | '@' pipeline (ui-input-trigger), the command surface over
     # it (ui-commands), and the reference sources (ui-skill / ui-reference).

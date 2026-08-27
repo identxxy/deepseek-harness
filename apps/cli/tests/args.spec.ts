@@ -57,6 +57,17 @@ describe('parseDshArgs', () => {
       .toEqual({ mode: 'plugin', profile: 'tui', args: ['add', '--save-dev', 'x'] })
   })
 
+  it('routes native tmux Console list and attach commands', () => {
+    expect(parse(['console', 'list'])).toEqual({ mode: 'console', action: 'list', tmuxPath: 'tmux', serverName: 'dsh' })
+    expect(parse(['console', 'attach', '01234567-89ab-4def-8123-456789abcdef']))
+      .toEqual({
+        mode: 'console', action: 'attach', consoleId: '01234567-89ab-4def-8123-456789abcdef',
+        tmuxPath: 'tmux', serverName: 'dsh',
+      })
+    expect(parse(['console', 'attach', '01234567-89ab-4def-8123-456789abcdef', '--tmux', '/usr/bin/tmux', '--server-name', 'dsh-lab']))
+      .toMatchObject({ mode: 'console', tmuxPath: '/usr/bin/tmux', serverName: 'dsh-lab' })
+  })
+
   it('routes profile and web config dumps', () => {
     expect(parse(['--profile', 'web', '--dump-config']))
       .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })

@@ -5,12 +5,12 @@
  * explicit act of widening what features may do to the sessions domain.
  */
 import type { Context } from '@deepseek-ai/cordis'
+packages/api/session-controller/src/client/contract/sessions.ts
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { AgentContext } from '../scope.ts'
-import type { SessionSearchResultItem } from '../sessions/manager.ts'
+import type { AgentContext } from '../scope.ts'import type { SessionSearchResultItem } from '../sessions/manager.ts'
 import type { SessionBinding, SessionListState } from '../sessions/service.ts'
 import type { SessionFace } from './session.ts'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -21,6 +21,12 @@ export type { AgentContext } from '../scope.ts'
 export interface ISessions {
   /** The useSessions standard feed (list rows + current selection; read face — writes stay inside the domain). */
   readonly list: ObservableSnapshot<SessionListState>
+  /**
+   * Resolve one Session's render-layer bundle without changing selection.
+   * @param id - explicitly addressed Session id.
+   * @returns the bundle, or undefined when the Session is unavailable.
+   */
+  renderProvideInfo(id: string): SessionProvideInfo | undefined
   /**
    * The `session.search` result bound the wire schema fixes, exposed to
    * presentation as injected data. Not per-connection state: every transport
@@ -120,4 +126,13 @@ export interface ISessions {
    * @returns binding, or undefined for a session neither listed nor already scoped.
    */
   binding(id: SessionId): SessionBinding | undefined
+  /**
+   * Retain and stage one explicitly addressed Session view without changing
+   * the global selection.
+   * Pending or stale persisted ids remain unavailable without throwing; a
+   * later catalog row activates the lease.
+   * @param id - explicitly addressed session id.
+   * @returns idempotent disposer releasing this view's lease.
+   */
+  acquire(id: SessionId): () => void
 }

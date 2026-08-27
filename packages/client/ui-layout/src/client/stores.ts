@@ -12,6 +12,11 @@ import {
   clampWidth, DETAILS_DEFAULT, DETAILS_MAX, DETAILS_MIN,
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from './columns.ts'
+import {
+  closePane, decodePersistedPaneLayout, firstPaneId, hasPaneId, reconcileActorPanes, replacePaneActor,
+  resizePaneSplit, splitPane,
+} from './panes.ts'
+import type { ActorRef, PaneNode, PaneSplitDirection } from './panes.ts'
 
 /**
  * Layout store state: desktop panel width preferences in px (0 = closed),
@@ -24,6 +29,9 @@ type LayoutState = {
   details: number
   singlePane: boolean
   mobileView: 'auto' | 'sessions' | 'conversation'
+  paneVersion: 1
+  paneRoot: PaneNode | null
+  activePaneId: string | null
 }
 
 /**
@@ -39,7 +47,15 @@ type LayoutActions = {
   showConversation: (draft: LayoutState) => void
   openDetails: (draft: LayoutState) => void
   closeDetails: (draft: LayoutState) => void
+  openActor: (draft: LayoutState, actor: ActorRef, paneId: string) => void
+  splitActor: (draft: LayoutState, actor: ActorRef, direction: PaneSplitDirection, splitId: string, paneId: string) => void
+  focusPane: (draft: LayoutState, paneId: string) => void
+  closeActorPane: (draft: LayoutState, paneId: string) => void
+  reconcileActorCatalog: (draft: LayoutState, actorKind: ActorRef['kind'], availableIds: ReadonlySet<string>) => void
+  resizeActorSplit: (draft: LayoutState, splitId: string, ratio: number) => void
 }
+
+const PANE_PERSIST_KEY = 'dsh.layout.panes.v1'
 
 /**
  * Create the layout panel store handle. The preference IS the width, so
@@ -53,7 +69,27 @@ type LayoutActions = {
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, singlePane: false, mobileView: 'auto' }),
+    init: (): LayoutState => ({
+      sidebar: SIDEBAR_DEFAULT,
+      details: 0,
+      singlePane: false,
+      mobileView: 'auto',
+      paneVersion: 1,
+      paneRoot: null,
+      activePaneId: null,
+    }),
+    persist: {
+      name: PANE_PERSIST_KEY,
+      select: (state: LayoutState) => ({
+        paneVersion: state.paneVersion,
+        paneRoot: state.paneRoot,
+        activePaneId: state.activePaneId,
+      }),
+      merge: (initial: LayoutState, persisted: unknown): LayoutState => ({
+        ...initial,
+        ...decodePersistedPaneLayout(persisted),
+      }),
+    },
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
@@ -70,6 +106,54 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       showConversation: (d) => { d.mobileView = 'conversation' },
       openDetails: (d) => { if (d.details === 0) d.details = DETAILS_DEFAULT },
       closeDetails: (d) => { d.details = 0 },
+      openActor: (d, actor: ActorRef, paneId: string) => {
+        if (d.paneRoot === null) {
+          d.paneRoot = { kind: 'leaf', id: paneId, actor }
+          d.activePaneId = paneId
+          return
+        }
+        const target = d.activePaneId !== null && hasPaneId(d.paneRoot, d.activePaneId)
+          ? d.activePaneId
+          : firstPaneId(d.paneRoot)
+        if (target === undefined) return
+        d.paneRoot = replacePaneActor(d.paneRoot, target, actor)
+        d.activePaneId = target
+      },
+      splitActor: (d, actor: ActorRef, direction: PaneSplitDirection, splitId: string, paneId: string) => {
+        if (d.paneRoot === null) {
+          d.paneRoot = { kind: 'leaf', id: paneId, actor }
+          d.activePaneId = paneId
+          return
+        }
+        const target = d.activePaneId !== null && hasPaneId(d.paneRoot, d.activePaneId)
+          ? d.activePaneId
+          : firstPaneId(d.paneRoot)
+        if (target === undefined) return
+        const splitRoot = splitPane(d.paneRoot, target, direction, splitId, paneId, actor)
+        if (splitRoot === d.paneRoot) return
+        d.paneRoot = splitRoot
+        d.activePaneId = paneId
+      },
+      focusPane: (d, paneId: string) => {
+        if (hasPaneId(d.paneRoot, paneId)) d.activePaneId = paneId
+      },
+      closeActorPane: (d, paneId: string) => {
+        if (d.paneRoot === null) return
+        d.paneRoot = closePane(d.paneRoot, paneId)
+        if (d.activePaneId === paneId || !hasPaneId(d.paneRoot, d.activePaneId ?? '')) {
+          d.activePaneId = firstPaneId(d.paneRoot) ?? null
+        }
+      },
+      reconcileActorCatalog: (d, actorKind: ActorRef['kind'], availableIds: ReadonlySet<string>) => {
+        d.paneRoot = reconcileActorPanes(d.paneRoot, actorKind, availableIds)
+        if (!hasPaneId(d.paneRoot, d.activePaneId ?? '')) {
+          d.activePaneId = firstPaneId(d.paneRoot) ?? null
+        }
+        if (d.paneRoot === null) d.mobileView = 'sessions'
+      },
+      resizeActorSplit: (d, splitId: string, ratio: number) => {
+        if (d.paneRoot !== null) d.paneRoot = resizePaneSplit(d.paneRoot, splitId, ratio)
+      },
     },
   })
   return handle

@@ -1,4 +1,10 @@
 // @vitest-environment jsdom
+// Client apply wiring under the terminal register form: ctx.layout provided,
+// ONE register() call declares the five child slots + seats the store factory
+// + wires the panel actions through the inject hook; teardown cascades
+// (service unprovided + declarations gone + registration cleared). Node half
+// and the invariant companion ride along — one line exposes the aggregate
+// coverage gate still requires exercised.
 
 import { Context } from '@deepseek-ai/cordis'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
@@ -19,22 +25,37 @@ async function bench() {
   const slotsFiber = ctx.plugin(SlotRegistry)
   // Theme registers its Appearance settings row and requires the connection
   // seam for persistence; model this bench as a remote, memory-only browser.
-  ctx.provide('locale', new LocaleRuntime(ctx))
+  const locale = new LocaleRuntime(ctx)
+  ctx.provide('locale', locale)
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+  ctx.provide('sessions', { open: vi.fn(), acquire: vi.fn(() => () => {}) } as never)
   await ctx.plugin({ inject: themeInject, apply: themeApply }).await()
   await slotsFiber.await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale }
 }
 
 describe('ui-layout client apply', () => {
   it('declares its service dependencies', () => {
-    expect(inject).toEqual(['slots', 'theme', 'locale'])
+    expect(inject).toEqual(['slots', 'theme', 'locale', 'sessions'])
   })
 
-  it('provides ctx.layout and registers AppFrame into root with the three child declarations', async () => {
+  it('registers pane chrome copy in both shipped locales', async () => {
+    const { ctx, locale } = await bench()
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const t = locale.bind('layout')
+    locale.setLocale('en')
+    expect(t('terminal')).toBe('Terminal')
+    expect(t('splitRight')).toBe('Split right')
+    locale.setLocale('zh')
+    expect(t('terminal')).toBe('终端')
+    expect(t('splitRight')).toBe('向右分屏')
+  })
+
+  it('provides ctx.layout and registers AppFrame into root with the five child declarations', async () => {
     const { ctx, slots } = await bench()
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
@@ -45,6 +66,8 @@ describe('ui-layout client apply', () => {
     expect(slots.spec('sidebar')).toEqual({ kind: 'single', scope: 'root' })
     expect(slots.spec('conversation')).toEqual({ kind: 'single', scope: 'session-maybe' })
     expect(slots.spec('details')).toEqual({ kind: 'single', scope: 'session' })
+    expect(slots.spec('shell.overlay')).toEqual({ kind: 'list', scope: 'root' })
+    expect(slots.spec('workspace.console')).toEqual({ kind: 'single', scope: 'root' })
   })
 
   it('injects no business face and attaches the layout actions', async () => {
@@ -54,14 +77,27 @@ describe('ui-layout client apply', () => {
     const actions = {
       setSidebar: vi.fn(), setDetails: vi.fn(), toggleSidebar: vi.fn(), setSinglePane: vi.fn(),
       showSessionList: vi.fn(), showConversation: vi.fn(), openDetails: vi.fn(), closeDetails: vi.fn(),
+      openActor: vi.fn(), splitActor: vi.fn(), focusPane: vi.fn(), closeActorPane: vi.fn(),
+      reconcileActorCatalog: vi.fn(), resizeActorSplit: vi.fn(),
     }
-    const injected = (slots.entries('root')[0]!.inject as (actions: never) => object)(actions as never)
-    expect(injected).toEqual({})
+    const injected = (slots.entries('root')[0]!.inject as (actions: never) => {
+      selectSession: (id: never) => void
+      stageSession: (id: never) => () => void
+    })(actions as never)
+    expect(typeof injected.selectSession).toBe('function')
+    expect(typeof injected.stageSession).toBe('function')
+    injected.selectSession('session-2' as never)
+    expect((ctx.get('sessions') as unknown as { open: ReturnType<typeof vi.fn> }).open).toHaveBeenCalledWith('session-2')
+    const release = injected.stageSession('session-3' as never)
+    expect((ctx.get('sessions') as unknown as { acquire: ReturnType<typeof vi.fn> }).acquire).toHaveBeenCalledWith('session-3')
+    expect(release).toEqual(expect.any(Function))
     const layout = ctx.get('layout') as LayoutController
     layout.toggleSidebar()
     expect(actions.toggleSidebar).toHaveBeenCalledOnce()
     layout.showConversation()
     expect(actions.showConversation).toHaveBeenCalledOnce()
+    layout.reconcileActorCatalog('console', new Set(['console-1']))
+    expect(actions.reconcileActorCatalog).toHaveBeenCalledWith('console', new Set(['console-1']))
   })
 
   it('theme presenter applies the initial snapshot, follows theme/change, and unwinds on dispose', async () => {

@@ -541,9 +541,12 @@ function clientConfig(id: string, entry: string): UserConfig {
       },
     }, {
       name: 'dsh-css-global-inline',
-      resolveId(source: string, importer: string | undefined) {
+      async resolveId(source: string, importer: string | undefined) {
         if (!source.endsWith('.css') || source.endsWith('.module.css')) return null
-        const abs = importer !== undefined ? sourceAssetPath(source, importer) : source
+        const abs = importer !== undefined && isBareSpecifier(source)
+          ? (await this.resolve(source, importer, { skipSelf: true }))?.id
+          : importer !== undefined ? sourceAssetPath(source, importer) : source
+        if (abs === undefined) throw new Error(`tsdown: cannot resolve global stylesheet ${source}`)
         return GLOBAL_CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
       },
       async load(virtualId: string) {

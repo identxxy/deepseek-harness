@@ -309,6 +309,8 @@ export type MatchedShare<E extends SlotEntryDef, M> =
 
 /** Props of the standard-kit SessionProvider seat. */
 export interface SessionAreaProps {
+  /** Exact Session to bind; omitted follows the runtime's current selection. */
+  sessionId?: SessionIdOf | undefined
   /** No-session body (also covers a current id whose session cannot be resolved). */
   empty?: (() => ReactNode) | undefined
   /** Session body; the framework remounts it per session identity. */

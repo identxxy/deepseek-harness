@@ -1,36 +1,38 @@
-# Host-owned Console Runtime
+# Durable Human Terminal Consoles
 
 English | [中文](console.zh.md)
 
-The console subsystem gives a Host an interactive terminal process in a registered workspace without widening the model-owned [terminal](terminal.md) capability. The Service Definition is [`@deepseek-ai/dsh-console`](../../packages/console/console/README.md); the process-local provider is [`@deepseek-ai/dsh-console-local`](../../packages/console/console-local/README.md).
+The Console subsystem gives a human an interactive terminal in a registered Workspace without widening the model-owned [terminal](terminal.md) capability. The Service Definition is [`@deepseek-ai/dsh-console`](../../packages/console/console/README.md), the durable provider is [`@deepseek-ai/dsh-console-tmux`](../../packages/console/console-tmux/README.md), and [`@deepseek-ai/dsh-console-remote`](../../packages/console/console-remote/README.md) carries the catalog and ephemeral attachment operations to the browser.
 
-## Identity and authorization
+## Workload and attachment identity
 
-`ConsoleId` identifies one runtime record. `ConsoleCapability` is an independent random bearer secret. Every read, mutation, signal, and stop requires their pair; an unknown id and an incorrect capability both fail as `ACCESS_DENIED`, so callers cannot use authorization failures as an existence oracle.
+`ConsoleId` identifies one durable tmux workload. It survives Host restart because the dedicated tmux server stores a versioned DSH metadata record on the session. Listing, creation, rename, archive, restore, and explicit termination rely on the deployment's authenticated ingress and do not place authority in tmux metadata.
 
 ```ts type-equiv
-/** Authorized reference to one console session. */
-interface ConsoleAccess {
-  readonly consoleId: ConsoleId
-  readonly capability: ConsoleCapability
+/** Authorized reference to one ephemeral attachment; the Console identity alone grants no terminal I/O. */
+interface ConsoleAttachmentAccess {
+  readonly attachmentId: ConsoleAttachmentId
+  readonly capability: ConsoleAttachmentCapability
 }
 ```
 
-Snapshots omit the capability and expose the workspace id, exact cwd, top-level pid, current dimensions, status, and output window offsets. Status is discriminated as `running`, `exited` with process outcome, or `failed` with a transport diagnostic.
+Each Web viewer receives a new process-local `ConsoleAttachmentId` and random bearer capability. Attachment I/O, output reads, resize, and detach require their pair. Capabilities never enter the durable catalog, tmux metadata, browser storage, or Agent Session log. A native `dsh console attach <console-id>` joins the same workload through the local Unix user's tmux socket permissions.
 
-## Output and lifecycle
+## Persistence and lifecycle
 
-Output cursors are absolute whole-stream byte positions. A data result returns a fresh `Uint8Array`, the requested and resume cursors, and the latest available cursor. A cursor older than the retained tail returns only a gap; a future, negative, or non-integer cursor fails as `INVALID_CURSOR`.
+The provider uses a configured dedicated tmux server and adopts only sessions whose DSH-generated name and complete metadata agree. One Console maps to one tmux session. Browser and Host shutdown close only ephemeral tmux Client processes; archive changes catalog visibility without affecting the workload. `terminate(ConsoleId)` is the only DSH operation that kills the tmux session. An external kill leaves an ended catalog record after reconciliation.
+
+Each attachment retains a bounded raw output window with absolute byte cursors. Reattaching starts a fresh tmux Client, so tmux redraws the current screen and the browser does not treat raw bytes as durable terminal state. A cursor older than the retained tail returns an explicit gap; invalid or future cursors fail.
 
 ```ts type-equiv
-/** Atomic console state and output observation returned by a long-poll wait. */
+/** Atomic attachment state and output observation returned by a long-poll wait. */
 interface ConsoleOutputObservation {
-  readonly console: ConsoleSnapshot
+  readonly attachment: ConsoleAttachmentSnapshot
   readonly output: ConsoleOutputRead
 }
 ```
 
-The process-local provider commits exit only after terminal output ends. Explicit stop awaits complete subprocess-terminal quiescence before deleting the record. Service disposal prevents new work, aborts unpublished opens, and attempts cleanup for every published record.
+Creation is a publication transaction: create the detached session, configure its size policy, write metadata, read it back, and only then publish the Console. A failed transaction rolls back only its newly allocated DSH session. Provider disposal blocks new operations, stops reconciliation, and detaches managed Web Clients without terminating durable workloads.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -44,51 +46,96 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.consoleRemote` — `ConsoleRemoteService`
 
-Remote-only authorized console operations under the `consoles` wire namespace.
+Remote Console catalog, lifecycle, attachment, and terminal I/O operations under the `consoles` wire namespace.
 
 ```ts cordis-catalog
 /**
- * Project one authorized snapshot without host process coordinates.
- * @param request - Authorized console reference.
- * @returns JSON-safe snapshot or business failure.
+ * List the complete durable Console catalog.
+ * @returns The catalog or a provider business failure.
  */
-@Remote('snapshot') snapshot(request: ConsoleRemoteAccessRequest): ConsoleRemoteResult<ConsoleRemoteSnapshot>
+@Remote('list') async list(): Promise<ConsoleRemoteResult<readonly ConsoleRemoteSnapshot[]>>
 
 /**
- * Read immediately or wait once for output or terminal state.
+ * Create one durable Console through the authorized carrier.
+ * @param request - Workspace, title, and initial dimensions.
+ * @param signal - Carrier cancellation.
+ * @returns The durable Console or a business failure.
+ */
+@Remote('create') async create(request: ConsoleRemoteCreateRequest, signal: AbortSignal): Promise<ConsoleRemoteResult<ConsoleRemoteSnapshot>>
+
+/**
+ * Read the current public state of one Console.
+ * @param request - Durable Console identity.
+ * @returns Its current state or a business failure.
+ */
+@Remote('snapshot') snapshot(request: ConsoleRemoteIdRequest): ConsoleRemoteResult<ConsoleRemoteSnapshot>
+
+/**
+ * Replace one Console's display title.
+ * @param request - Console identity and replacement title.
+ * @returns State after metadata durability or a business failure.
+ */
+@Remote('rename') async rename(request: ConsoleRemoteRenameRequest): Promise<ConsoleRemoteResult<ConsoleRemoteSnapshot>>
+
+/**
+ * Archive or restore one durable Console.
+ * @param request - Console identity and desired archive state.
+ * @returns State after metadata durability or a business failure.
+ */
+@Remote('setArchived') async setArchived(request: ConsoleRemoteArchiveRequest): Promise<ConsoleRemoteResult<ConsoleRemoteSnapshot>>
+
+/**
+ * Start one ephemeral terminal Client for a running Console.
+ * @param request - Running Console and initial attachment dimensions.
+ * @param signal - Carrier cancellation.
+ * @returns A new authorized attachment or a business failure.
+ */
+@Remote('attach') async attach( request: ConsoleRemoteAttachRequest, signal: AbortSignal, ): Promise<ConsoleRemoteResult<ConsoleRemoteAttachmentOpenResult>>
+
+/**
+ * Read one authorized attachment's current state.
+ * @param request - Authorized attachment reference.
+ * @returns Its current state or a business failure.
+ */
+@Remote('attachmentSnapshot') attachmentSnapshot(request: ConsoleRemoteAttachmentAccessRequest): ConsoleRemoteResult<ConsoleRemoteAttachmentSnapshot>
+
+/**
+ * Read immediately or wait once for attachment output or state.
  * @param request - Authorized cursor and requested wait.
  * @param signal - Carrier cancellation.
- * @returns bounded observation, timeout observation, or business failure.
+ * @returns A bounded observation or business failure.
  */
 @Remote('read') async read(request: ConsoleRemoteReadRequest, signal: AbortSignal): Promise<ConsoleRemoteResult<ConsoleRemoteObservation>>
 
 /**
- * Write bounded UTF-8 input after capability authorization.
- * @param request - Authorized UTF-8 terminal input.
- * @returns completion or business failure.
+ * Write bounded UTF-8 terminal input to one attachment.
+ * @param request - Authorized terminal input.
+ * @param signal - Carrier cancellation.
+ * @returns Completion or a business failure.
  */
-@Remote('write') async write(request: ConsoleRemoteWriteRequest): Promise<ConsoleRemoteResult<null>>
+@Remote('write') async write(request: ConsoleRemoteWriteRequest, signal?: AbortSignal): Promise<ConsoleRemoteResult<null>>
 
 /**
- * Resize one authorized console.
- * @param request - Authorized terminal dimensions.
- * @returns completion or business failure.
+ * Resize one authorized terminal attachment.
+ * @param request - Authorized attachment dimensions.
+ * @param signal - Carrier cancellation.
+ * @returns Completion or a business failure.
  */
-@Remote('resize') async resize(request: ConsoleRemoteResizeRequest): Promise<ConsoleRemoteResult<null>>
+@Remote('resize') async resize(request: ConsoleRemoteResizeRequest, signal?: AbortSignal): Promise<ConsoleRemoteResult<null>>
 
 /**
- * Signal one authorized console's foreground process group.
- * @param request - Authorized foreground signal.
- * @returns delivery facts or business failure.
+ * Detach one terminal Client without stopping its Console.
+ * @param request - Authorized attachment reference.
+ * @returns Completion after only the tmux Client exits, or a business failure.
  */
-@Remote('signal') async signal(request: ConsoleRemoteSignalRequest): Promise<ConsoleRemoteResult<{ delivered: true; targetPgid: number }>>
+@Remote('detach') async detach(request: ConsoleRemoteAttachmentAccessRequest): Promise<ConsoleRemoteResult<null>>
 
 /**
- * Stop and remove one authorized console.
- * @param request - Authorized console reference.
- * @returns completion or business failure.
+ * Terminate one durable Console workload explicitly.
+ * @param request - Durable Console identity.
+ * @returns Completion after termination, or a business failure.
  */
-@Remote('stop') async stop(request: ConsoleRemoteAccessRequest): Promise<ConsoleRemoteResult<null>>
+@Remote('terminate') async terminate(request: ConsoleRemoteIdRequest): Promise<ConsoleRemoteResult<null>>
 ```
 
 Source: [`packages/console/console-remote/src/index.ts`](../../packages/console/console-remote/src/index.ts)
@@ -97,71 +144,107 @@ Source: [`packages/console/console-remote/src/index.ts`](../../packages/console/
 
 ### `ctx.consoles` — `ConsoleRuntime` (abstract seam)
 
-Abstract host-owned console runtime.
+Abstract runtime for durable Human Terminals and their ephemeral terminal Clients.
 
 ```ts cordis-catalog
 /**
- * Open the configured human shell in one available workspace.
- * @param request - Workspace and initial dimensions.
+ * List every durable Console known to this provider.
+ * @returns The current catalog, including archived and ended records.
+ */
+abstract list(): Promise<readonly ConsoleSnapshot[]>
+
+/**
+ * Read one Console from the current catalog.
+ * @param consoleId - Durable Console identity.
+ * @returns Its current public state.
+ */
+abstract snapshot(consoleId: ConsoleId): ConsoleSnapshot
+
+/**
+ * Create and publish one durable Console workload.
+ * @param request - Workspace, title, and initial tmux dimensions.
  * @param signal - Allocation cancellation.
- * @returns the authorized live console after publication.
+ * @returns The published durable Console.
  */
-abstract openHumanShell(request: HumanShellOpenRequest, signal?: AbortSignal): Promise<ConsoleOpenResult>
+abstract create(request: ConsoleCreateRequest, signal?: AbortSignal): Promise<ConsoleSnapshot>
 
 /**
- * Read current public state without exposing the bearer capability.
- * @param access - Authorized console reference.
- * @returns fresh public state.
+ * Replace one Console's display title.
+ * @param consoleId - Durable Console identity.
+ * @param title - Replacement display title.
+ * @returns State after metadata durability.
  */
-abstract snapshot(access: ConsoleAccess): ConsoleSnapshot
+abstract rename(consoleId: ConsoleId, title: string): Promise<ConsoleSnapshot>
 
 /**
- * Read one repeatable bounded page from an absolute whole-stream cursor.
- * @param access - Authorized console reference.
+ * Change whether one Console appears in the active catalog.
+ * @param consoleId - Durable Console identity.
+ * @param archived - Desired catalog visibility.
+ * @returns State after metadata durability.
+ */
+abstract setArchived(consoleId: ConsoleId, archived: boolean): Promise<ConsoleSnapshot>
+
+/**
+ * Start one ephemeral terminal Client for a running Console.
+ * @param request - Running Console and initial Client dimensions.
+ * @param signal - Allocation cancellation.
+ * @returns A newly authorized attachment.
+ */
+abstract attach(request: ConsoleAttachRequest, signal?: AbortSignal): Promise<ConsoleAttachmentOpenResult>
+
+/**
+ * Read one attachment's current process and output state.
+ * @param access - Authorized attachment reference.
+ * @returns Fresh public attachment state.
+ */
+abstract attachmentSnapshot(access: ConsoleAttachmentAccess): ConsoleAttachmentSnapshot
+
+/**
+ * Read retained output immediately from one attachment.
+ * @param access - Authorized attachment reference.
  * @param fromByte - Absolute output cursor.
- * @returns retained bytes or an explicit retention gap.
+ * @returns Retained bytes or an explicit retention gap.
  */
-abstract readOutput(access: ConsoleAccess, fromByte: number): ConsoleOutputRead
+abstract readOutput(access: ConsoleAttachmentAccess, fromByte: number): ConsoleOutputRead
 
 /**
- * Wait for output, a retention gap, or a terminal state transition and return one atomic observation.
- * @param access - Authorized console reference.
+ * Wait until one attachment has output or changes state.
+ * @param access - Authorized attachment reference.
  * @param fromByte - Absolute output cursor.
- * @param signal - Caller cancellation for this one wait.
- * @returns current console state and one bounded output page.
+ * @param signal - Cancellation for this wait.
+ * @returns Current attachment state and one output page.
  */
-abstract waitOutput(access: ConsoleAccess, fromByte: number, signal: AbortSignal): Promise<ConsoleOutputObservation>
+abstract waitOutput(access: ConsoleAttachmentAccess, fromByte: number, signal: AbortSignal): Promise<ConsoleOutputObservation>
 
 /**
- * Deliver text to the live terminal input.
- * @param access - Authorized console reference.
- * @param data - Terminal input text.
- * @returns after delivery.
+ * Write raw input to one terminal Client.
+ * @param access - Authorized attachment reference.
+ * @param data - Raw terminal input.
+ * @returns After delivery to the tmux Client PTY.
  */
-abstract write(access: ConsoleAccess, data: string): Promise<void>
+abstract write(access: ConsoleAttachmentAccess, data: string): Promise<void>
 
 /**
- * Resize the live terminal and commit the dimensions after provider success.
- * @param access - Authorized console reference.
- * @param size - New dimensions.
- * @returns after resize.
+ * Resize one terminal Client PTY.
+ * @param access - Authorized attachment reference.
+ * @param size - New Client dimensions.
+ * @returns After PTY resize.
  */
-abstract resize(access: ConsoleAccess, size: ConsoleSize): Promise<void>
+abstract resize(access: ConsoleAttachmentAccess, size: ConsoleSize): Promise<void>
 
 /**
- * Signal the terminal's current foreground process group.
- * @param access - Authorized console reference.
- * @param signal - Foreground signal.
- * @returns the exact process group that received the signal.
+ * Detach one ephemeral terminal Client without stopping its Console.
+ * @param access - Authorized attachment reference.
+ * @returns After the tmux Client exits; the Console workload remains alive.
  */
-abstract signal(access: ConsoleAccess, signal: ConsoleSignal): Promise<ConsoleSignalResult>
+abstract detach(access: ConsoleAttachmentAccess): Promise<void>
 
 /**
- * Terminate the complete terminal session and remove its record.
- * @param access - Authorized console reference.
- * @returns after complete session quiescence.
+ * Terminate one durable Console workload and all of its attachments.
+ * @param consoleId - Durable Console identity.
+ * @returns After provider termination and attachment quiescence.
  */
-abstract stop(access: ConsoleAccess): Promise<void>
+abstract terminate(consoleId: ConsoleId): Promise<void>
 ```
 
 Source: [`packages/console/console/src/index.ts`](../../packages/console/console/src/index.ts)

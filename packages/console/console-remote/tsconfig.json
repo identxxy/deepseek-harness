@@ -4,7 +4,7 @@
   "include": ["src"],
   "references": [
     { "path": "../../../vendor/cordis" }, { "path": "../../../vendor/schemastery" },
-    { "path": "../console" }, { "path": "../../typert/protocol" },
+    { "path": "../console" }, { "path": "../../typert/protocol" }, { "path": "../../workspace/workspace" },
     { "path": "../../runtime-diagnostics/invariants" }
   ]
 }

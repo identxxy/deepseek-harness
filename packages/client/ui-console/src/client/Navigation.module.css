@@ -1,0 +1,113 @@
+.newTerminal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(100% - 4px);
+  height: 38px;
+  margin: 0 2px 8px;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.newTerminal:hover:not(:disabled) {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+.newTerminal:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.newTerminal:not(:has(span)) {
+  width: 36px;
+  height: 36px;
+  margin: 0 0 12px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.consoleRows {
+  min-width: 0;
+}
+
+.sectionLabel {
+  padding: 12px 8px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.consoleRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.consoleRow:hover,
+.consoleRow:focus-visible {
+  outline: none;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.consoleRow[aria-disabled='true'] {
+  cursor: default;
+}
+
+.consoleIcon {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  margin-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.consoleTitle {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.status {
+  flex: none;
+  margin-left: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.consoleRow:hover .rowAction,
+.rowAction:focus-visible {
+  opacity: 1;
+}

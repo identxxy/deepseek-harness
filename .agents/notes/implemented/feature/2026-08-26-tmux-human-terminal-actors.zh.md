@@ -1,6 +1,6 @@
 # Agent Note: tmux 支持的 Human Terminal actor
 
-Status: proposed
+Status: implemented
 
 [English](2026-08-26-tmux-human-terminal-actors.md) | 中文
 
@@ -10,7 +10,7 @@ Status: proposed
 
 产品把两种 workload 都称为 actor，但直接 Terminal 没有模型、prompt、inbox、turn 或 agent loop。把它注册成 core `Agent` 会让模型 lifecycle event 与 durable Session log 描述从未发生的工作。
 
-## 提案
+## 决策
 
 把 Human Terminal 作为 Console 能力支持的一等产品 actor，而不是 core `Agent`。统一 Workspace UI 同时列出模型 Agent Session 与 Human Console，但两种 actor 保留各自的 runtime 与 renderer。Agent conversation 继续采用事件溯源；Terminal byte 不写入 Session log、telemetry 或 connection-wide Host event stream。
 
@@ -22,12 +22,16 @@ tmux provider 使用配置的专属 tmux server，而不是用户默认的 serve
 
 Desktop Client 在可调整尺寸的水平或垂直 split 中渲染可寻址的 Agent 与 Console actor。普通 Sidebar 打开操作进入 active pane；显式操作会在新 split 中打开 actor。layout state 属于各 Client device。窄屏 Client 只渲染一个 focused actor，并通过 browser history 返回统一列表。本地 `dsh console attach <console-id>` 命令会用原生 tmux Client 替换自身进程；它会检测现有 tmux Client，避免创建不受支持的 nested attachment。
 
+处于 ready 状态且完整的 Host Console catalog 是 Client 判断 Console 可用性的权威来源。每个 running Console 都保持可用，包括 pane 仍打开的 archived Console。ended 或不存在的 Console 会在一次 layout update 中从导航和全部 device-local pane leaf 移除；layout 会折叠空 split、选择存活的 active pane，并让没有 pane 的窄屏 Client 返回统一列表。loading 与 error 状态不表示 workload 已移除。Web attachment 观察到 tmux Client exited 或 failed 时会立即请求 catalog refresh，但不会直接关闭 pane，因此 detach viewer 不会被当作 workload termination。
+
+Catalog refresh 只允许一条当前 list request 与一条合并的 deferred request，catalog mutation 按调用顺序执行。Connection reset、取代旧状态的 mutation 与 plugin dispose 会使旧 response 失效。即使 Remote promise 永不返回，browser-side cancellation 也会让 wait 收敛；dispose 会等待 catalog、mutation 与 attachment 工作进入 quiescent 状态。
+
 ## 包角色
 
 - `dsh-console` 定义 durable Console identity、ephemeral attachment identity、authorization、lifecycle 与 provider operation。
 - `dsh-console-tmux` 通过 subprocess 能力提供 DSH-owned tmux workload 与 tmux-client attachment。
-- `dsh-console-remote` 暴露经过授权的 list、create、attach、archive、terminate、attachment I/O、resize、signal 与 detach 操作。
-- Client Console runtime 与 `dsh-ui-console` 把 Console 投影到统一 Workspace actor list，并渲染 Web Terminal pane。
+- `dsh-console-remote` 暴露经过授权的 list、create、attach、archive、terminate、attachment I/O、resize 与 detach 操作。
+- Client Console runtime 与 `dsh-client-ui-console` 把 Console 投影到统一 Workspace actor list，并渲染 Web Terminal pane。
 - CLI consumer 解析 Console id 并执行原生 tmux attachment，不把 Kitty 变成依赖。
 
 ## 考虑过的替代方案
@@ -44,17 +48,19 @@ Desktop Client 在可调整尺寸的水平或垂直 split 中渲染可寻址的 
 
 **所有 viewer 共享一个 Web tmux Client。** 不采用，因为尺寸、重连 redraw、cursor retention 与 attachment cleanup 都属于 viewer。每个 viewer 使用临时 attachment，符合 tmux 原生 Client 模型。
 
-## 验收标准
+## 验证
 
 - 在已注册 Workspace 中创建 Human Terminal，会在专属 tmux server 上启动一个真实 session，并在 Agent Session 旁显示，同时不创建 core Agent 或 model turn。
 - 同一个 Console 接受并发的 Web 与原生 tmux attachment；Client 之间可以看见 input 与屏幕更新，detach 所有 Client 后 workload 仍继续运行。
 - 重启 dsh Host 会保留 tmux workload 与 Console id，使旧 process-local capability 失效，并允许新的 Web attachment 获得完整屏幕 redraw。
 - Desktop Client 可以把 Agent 与 Console actor 放入可调整尺寸的 split；窄屏 Client focus 一个 actor，并通过 browser history 返回统一列表。
+- shell exit、显式终止与外部 tmux 终止会在 ready catalog update 后移除 Console 导航 row 以及全部引用它的 pane；split collapse 与 active-pane fallback 原子完成，loading 或 error catalog 则保留现有 layout。
+- 真实 xterm Ctrl-D 路径会产生 exited attachment、触发即时 catalog refresh，并通过与周期 refresh 和显式终止相同的 catalog reconciliation 收敛。
 - Archive、restore、detach、external termination 与 explicit confirmed termination 具有不同的可观察状态，且不会 kill 无关 tmux session。
 - provider 不继承 Harness credential-shaped environment variable、不导入任意 tmux session、不把 remote value 插入 shell command，也不在 tmux metadata 中存储 authority。
 - 真实 tmux integration、Host restart、remote authorization、GUI behavior、keyless snapshot 与现有 Agent Terminal ownership test 覆盖 shipped composition。
 
-## 风险
+## 影响
 
 Human Terminal access 等价于 remote code execution，依赖现有 device-auth ingress 与 per-attachment capability。已 enroll device 一旦泄露，在撤销其 device credential 之前会获得与用户相同的 shell authority。
 

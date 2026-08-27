@@ -4,6 +4,9 @@
 - button "New session":
   - img
   - text: New Session
+- button "New terminal":
+  - img
+  - text: New terminal
 - text: Workspaces
 - button "Search sessions":
   - img
@@ -20,6 +23,9 @@
 - button "Settings":
   - img
   - text: Settings
+- text: Agent workspace
+- button "Split right": ⇥
+- button "Split down": ⇲
 - text: Into the Unknown Preview
 - button "Choose workspace":
   - img

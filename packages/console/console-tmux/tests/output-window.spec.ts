@@ -5,6 +5,8 @@ describe('OutputWindow', () => {
   it('ignores empty delivery chunks', () => {
     const output = new OutputWindow(8, 3)
     output.append(new Uint8Array())
+    expect(output.oldestByte).toBe(0)
+    expect(output.nextByte).toBe(0)
     expect(output.read(0)).toMatchObject({ kind: 'data', data: new Uint8Array(), nextByte: 0 })
   })
 
@@ -21,6 +23,14 @@ describe('OutputWindow', () => {
     first.data[0] = 99
     expect(again.data).toEqual(Uint8Array.from([1, 2, 3]))
     expect(output.read(3)).toMatchObject({ kind: 'data', fromByte: 3, nextByte: 5, availableThroughByte: 5 })
+  })
+
+  it('skips complete retained chunks before copying a page', () => {
+    const output = new OutputWindow(10, 2)
+    output.append(Uint8Array.from([1, 2]))
+    output.append(Uint8Array.from([3, 4]))
+    output.append(Uint8Array.from([5, 6]))
+    expect(output.read(4)).toMatchObject({ kind: 'data', data: Uint8Array.from([5, 6]) })
   })
 
   it('reports retention gaps and rejects future cursors', () => {
@@ -57,5 +67,15 @@ describe('OutputWindow', () => {
 
     const chunks = (output as unknown as { chunks: Array<{ bytes: Uint8Array } | undefined> }).chunks
     expect(chunks.reduce((bytes, chunk) => bytes + (chunk?.bytes.byteLength ?? 0), 0)).toBeLessThanOrEqual(10)
+  })
+
+  it('compacts a long discarded chunk prefix', () => {
+    const output = new OutputWindow(2, 2)
+    for (let index = 0; index < 130; index += 1) output.append(Uint8Array.of(index))
+    const chunks = (output as unknown as { chunks: unknown[]; head: number }).chunks
+    const head = (output as unknown as { head: number }).head
+    expect(chunks.length).toBeLessThan(64)
+    expect(head).toBeLessThan(2)
+    expect(output.read(128)).toMatchObject({ kind: 'data', data: Uint8Array.from([128, 129]) })
   })
 })

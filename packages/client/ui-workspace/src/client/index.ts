@@ -34,7 +34,8 @@ import { en, zh, type WorkspaceKey } from './locales.ts'
 export type { UiWorkspace } from './navigation.ts'
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
-  WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspacePickerInjected, WorkspacePickerProps,
+  WorkspaceActorRowsOwnerProps, WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspacePickerInjected,
+  WorkspacePickerProps,
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
@@ -103,6 +104,7 @@ export function apply(ctx: Context): void {
     startSession: (workspaceId) => { uiWorkspace.startSession(workspaceId) },
     open: (sessionId) => {
       sessions.open(sessionId)
+      ctx.layout.openActor({ kind: 'agent', id: sessionId })
       ctx.layout.showConversation()
     },
     searchSessions,
@@ -146,7 +148,10 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
     {
       name: 'sidebar.workspaces',
-      children: { 'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' } },
+      children: {
+        'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' },
+        'sidebar.workspaces.actor': { kind: 'list', scope: 'root' },
+      },
       store: createWorkspaceViewStore(),
       inject: browserInjected,
       locale: NS,

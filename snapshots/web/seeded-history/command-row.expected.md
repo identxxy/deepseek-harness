@@ -1,3 +1,7 @@
+- text: Agent Use the read tool twice
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
 - banner:
   - navigation "Session hierarchy":
     - button "Use the read tool twice" [disabled]

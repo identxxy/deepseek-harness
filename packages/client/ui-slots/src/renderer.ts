@@ -195,8 +195,7 @@ export interface SlotRendererHost {
    * @param scope - Slot scope.
    * @returns adapter, or `undefined` when the composition omitted its owner.
    */
-  scope(scope: Exclude<SlotScope, 'root'>): SlotScopeAdapter | undefined
-  /**
+  scope(scope: Exclude<SlotScope, 'root'>): SlotScopeAdapter | undefined  /**
    * Installed locale face backing the `t` standard seat (absent until the
    * locale plugin installs one; rendering an entry that declared `locale:`
    * without it is an assembly failure).

@@ -204,6 +204,10 @@ export class ClientSessions implements ISessions {
   private readonly scopes = new Map<SessionId, ScopeRecord>()
   /** In-flight scope drops remain here after records leave `scopes`, so root disposal can await quiescence. */
   private readonly scopeDrops = new Set<Promise<void>>()
+  /** Mounted addressed views retaining an independently staged Session window. */
+  private readonly leases = new Map<SessionId, number>()
+  /** The provide channel (roster, materialization rules, current projection) — shared with the test runtime's double. */
+  private readonly provideChannel: SessionProvideChannel
   /**
    * The staged session id — follows `list.current` exactly, holding its last
    * defined value across masked gaps (a transiently absent selection blanks
@@ -248,6 +252,7 @@ export class ClientSessions implements ISessions {
     // touches only session-side state and its own microtask-batched notifier.
     const disposeStageFollower = this.list.subscribe(() => {
       this.followCurrent()
+      this.stageLeases()
     })
     rootCtx.effect(() => async () => {
       disposeStageFollower()
@@ -511,6 +516,32 @@ export class ClientSessions implements ISessions {
   }
 
   /**
+   * Retain and stage one explicitly addressed Session view without changing
+   * the global selection. Multiple panes share the same Session window; each
+   * returned disposer releases exactly one holder.
+   * A lease may precede the catalog row during startup; it materializes when
+   * the Session becomes addressable and otherwise remains unavailable.
+   * @param id - explicitly addressed Session id.
+   * @returns idempotent disposer for this holder.
+   */
+  acquire(id: SessionId): () => void {
+    this.leases.set(id, (this.leases.get(id) ?? 0) + 1)
+    this.stageLease(id)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      const count = this.leases.get(id)
+      /* v8 ignore next -- the holder above owns one count until this closure releases it. */
+      if (count === undefined) return
+      if (count > 1) {
+        this.leases.set(id, count - 1)
+        return
+      }
+      this.leases.delete(id)
+      this.pruneScope(id)
+    }
+  }
    * Move the stage to the list's current session: sweep teardowns deferred
    * behind the previous occupant and pull the new occupant's history window.
    * Staging IS the open signal — the window opens ⟺ the session is on stage
@@ -534,6 +565,19 @@ export class ClientSessions implements ISessions {
       void record.session.open()
       void this.manager.refreshSubagents(current)
     }
+  }
+
+  /** Stage every mounted addressed view whose Session is now catalog-addressable. */
+  private stageLeases(): void {
+    for (const id of this.leases.keys()) this.stageLease(id)
+  }
+
+  /** Materialize and open one lease when its catalog row is available. */
+  private stageLease(id: SessionId): void {
+    if (!this.addressable(id)) return
+    const record = this.resolve(id)
+    /* v8 ignore next -- addressable ids always resolve; retained for future eligibility changes. */
+    if (record !== undefined) void record.session.open()
   }
 
   /**
@@ -567,8 +611,19 @@ export class ClientSessions implements ISessions {
     return record
   }
 
-  /** The one aliveness predicate shared by scope mint and prune: host-listed or currently addressed. */
+  /** Whether catalog or selection state authorizes minting a Session scope. */
+  private addressable(id: SessionId): boolean {
+    const { ids, current } = this.list.getSnapshot()
+    return current === id || ids.includes(id)
+  }
+
+  /** The one aliveness predicate shared by scope mint and prune: host-listed, currently addressed, or retained by an addressed view lease. */
   private eligible(id: SessionId): boolean {
+    return this.addressable(id) || this.leases.has(id)
+  }
+
+  /** Whether catalog or selection state authorizes minting a Session scope. */
+  private addressable(id: SessionId): boolean {
     const { ids, current } = this.list.getSnapshot()
     return current === id || ids.includes(id)
   }
@@ -650,6 +705,7 @@ export class ClientSessions implements ISessions {
   private pruneScopes(): void {
     if (this.list.getSnapshot().phase === 'pending') return
     for (const [id, record] of this.scopes) {
+      if (this.leases.has(id)) continue
       if (this.eligible(id)) continue
       if (id === this.watched) {
         this.deferredRemovals.add(id)
@@ -673,7 +729,26 @@ export class ClientSessions implements ISessions {
   private async drainScopeDrops(): Promise<void> {
     while (this.scopeDrops.size > 0) {
       await Promise.allSettled([...this.scopeDrops])
+  /** Drop one scope when no catalog, selection, stage, or addressed lease retains it. */
+  private pruneScope(id: SessionId): void {
+    if (this.leases.has(id)) return
+    if (this.eligible(id)) return
+    if (id === this.watched) {
+      this.deferredRemovals.add(id)
+      return
     }
+    const record = this.scopes.get(id)
+    if (record === undefined) return
+    this.scopes.delete(id)
+    this.deferredRemovals.delete(id)
+    this.startScopeDrop(id, record)
+  }
+    }
+    const record = this.scopes.get(id)
+    if (record === undefined) return
+    this.scopes.delete(id)
+    this.deferredRemovals.delete(id)
+    this.dropScope(id, record)
   }
 
   /**
