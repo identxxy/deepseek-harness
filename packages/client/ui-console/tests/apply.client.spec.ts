@@ -1,7 +1,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as applyHost } from '../src/index.ts'
 import { ConsoleRows, NewTerminalAction } from '../src/client/Navigation.tsx'
@@ -28,6 +28,7 @@ async function bench() {
     openActor: vi.fn(), openActorInSplit: vi.fn(), showConversation: vi.fn(), reconcileActorCatalog: vi.fn(),
   }
   ctx.provide('layout', layout as never)
+  ctx.provide('sessions', { list: { getSnapshot: () => ({ ids: [], byId: {}, phase: 'ready' }), subscribe: () => () => {} } } as never)
   class RemoteService extends Service {
     constructor(serviceCtx: Context) { super(serviceCtx, 'remote') }
   }
@@ -56,7 +57,7 @@ describe('ui-console apply', () => {
     const injections: unknown[] = []
     host.emit('webserver/index-inject', injections as never)
     expect(injections).toEqual([{ kind: 'global', name: '__DSH_CONSOLE_CONFIG__', value: { catalogRefreshIntervalMs: 5_000 } }])
-    expect(inject).toEqual(['slots', 'remote', 'remote.consoles', 'locale', 'layout'])
+    expect(inject).toEqual(['slots', 'remote', 'remote.consoles', 'locale', 'layout', 'sessions'])
     const b = await bench()
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()

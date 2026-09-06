@@ -136,6 +136,14 @@ const homeAndGuide = pairedPages([
     label: { root: '安全远程访问', en: 'Secure remote access' },
     sidebar: { root: 'zh-guide', en: 'en-guide' },
     section: { root: '入门', en: 'Guide' },
+    order: 3.5,
+  },
+  {
+    source: 'docs/user/guide/network-proxy.md',
+    route: 'guide/network-proxy.md',
+    label: { root: '网络代理', en: 'Network proxy' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '入门', en: 'Guide' },
     order: 3,
   },
   {

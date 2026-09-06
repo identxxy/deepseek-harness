@@ -1,5 +1,6 @@
 /** Simplified Chinese pane-canvas copy and key source. */
 export const zh = {
+  localBuild: 'DSH 本地构建',
   agent: 'Agent',
   terminal: '终端',
   sessionUnavailable: '会话不可用',
@@ -13,6 +14,7 @@ export type LayoutLocaleKey = keyof typeof zh
 
 /** English dictionary checked against the Chinese key set. */
 export const en = {
+  localBuild: 'DSH Local Build',
   agent: 'Agent',
   terminal: 'Terminal',
   sessionUnavailable: 'Session unavailable',

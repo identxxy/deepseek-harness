@@ -16,7 +16,7 @@
  */
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { SESSION_SEARCH_RESULT_LIMIT } from '../../types.ts'
@@ -201,13 +201,10 @@ export class ClientSessions implements ISessions {
    */
   private readonly selection: SnapshotStore<SessionSelection>
 
+  private readonly leases = new Map<SessionId, number>()
   private readonly scopes = new Map<SessionId, ScopeRecord>()
   /** In-flight scope drops remain here after records leave `scopes`, so root disposal can await quiescence. */
   private readonly scopeDrops = new Set<Promise<void>>()
-  /** Mounted addressed views retaining an independently staged Session window. */
-  private readonly leases = new Map<SessionId, number>()
-  /** The provide channel (roster, materialization rules, current projection) — shared with the test runtime's double. */
-  private readonly provideChannel: SessionProvideChannel
   /**
    * The staged session id — follows `list.current` exactly, holding its last
    * defined value across masked gaps (a transiently absent selection blanks
@@ -443,7 +440,7 @@ export class ClientSessions implements ISessions {
       // Flooring lands inside the anchor's own turn (every turn opens with a
       // turn/start), so the host's first-turn/end-at-or-after cut still ends
       // on that turn — never clipped back to the previous one.
-      ...(opts.atSeq === undefined ? {} : { atSeq: Math.floor(opts.atSeq) }),
+      ...(opts.atSeq === undefined ? {} : { atSeq: SessionSeq(Math.floor(opts.atSeq)) }),
     })
     if (!result.ok) throw new SessionForkError(result.error, opts.sessionId)
     this.projectList()
@@ -542,6 +539,8 @@ export class ClientSessions implements ISessions {
       this.pruneScope(id)
     }
   }
+
+  /**
    * Move the stage to the list's current session: sweep teardowns deferred
    * behind the previous occupant and pull the new occupant's history window.
    * Staging IS the open signal — the window opens ⟺ the session is on stage
@@ -581,15 +580,15 @@ export class ClientSessions implements ISessions {
   }
 
   /**
-   * Lazily mint the scope + binding for an eligible session. Eligibility and
-   * prune share one predicate: listed on the host or selected
+   * Lazily mint the scope + binding for a listed or selected session.
+   * Existing scopes may also be retained by addressed view leases. Selection
    * through a retained subagent address. Breadcrumb-only ancestors remain
    * summary data and do not keep scopes alive.
    */
   private resolve(id: SessionId): ScopeRecord | undefined {
     const existing = this.scopes.get(id)
     if (existing !== undefined) return existing
-    if (!this.eligible(id)) return undefined
+    if (!this.addressable(id)) return undefined
     return this.materializeScope(id)
   }
 
@@ -611,18 +610,11 @@ export class ClientSessions implements ISessions {
     return record
   }
 
-  /** Whether catalog or selection state authorizes minting a Session scope. */
-  private addressable(id: SessionId): boolean {
-    const { ids, current } = this.list.getSnapshot()
-    return current === id || ids.includes(id)
-  }
-
-  /** The one aliveness predicate shared by scope mint and prune: host-listed, currently addressed, or retained by an addressed view lease. */
+  /** Keep listed, selected, or leased Session scopes alive. */
   private eligible(id: SessionId): boolean {
     return this.addressable(id) || this.leases.has(id)
   }
 
-  /** Whether catalog or selection state authorizes minting a Session scope. */
   private addressable(id: SessionId): boolean {
     const { ids, current } = this.list.getSnapshot()
     return current === id || ids.includes(id)
@@ -705,7 +697,6 @@ export class ClientSessions implements ISessions {
   private pruneScopes(): void {
     if (this.list.getSnapshot().phase === 'pending') return
     for (const [id, record] of this.scopes) {
-      if (this.leases.has(id)) continue
       if (this.eligible(id)) continue
       if (id === this.watched) {
         this.deferredRemovals.add(id)
@@ -726,9 +717,6 @@ export class ClientSessions implements ISessions {
     )
   }
 
-  private async drainScopeDrops(): Promise<void> {
-    while (this.scopeDrops.size > 0) {
-      await Promise.allSettled([...this.scopeDrops])
   /** Drop one scope when no catalog, selection, stage, or addressed lease retains it. */
   private pruneScope(id: SessionId): void {
     if (this.leases.has(id)) return
@@ -743,12 +731,11 @@ export class ClientSessions implements ISessions {
     this.deferredRemovals.delete(id)
     this.startScopeDrop(id, record)
   }
+
+  private async drainScopeDrops(): Promise<void> {
+    while (this.scopeDrops.size > 0) {
+      await Promise.allSettled([...this.scopeDrops])
     }
-    const record = this.scopes.get(id)
-    if (record === undefined) return
-    this.scopes.delete(id)
-    this.deferredRemovals.delete(id)
-    this.dropScope(id, record)
   }
 
   /**

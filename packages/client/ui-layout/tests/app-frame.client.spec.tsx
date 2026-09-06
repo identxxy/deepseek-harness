@@ -17,18 +17,12 @@ import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import { SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
-<<<<<<< HEAD
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-=======
 import type { LayoutActions } from '@deepseek-ai/dsh-client-ui-layout/src/client/service.ts'
 import type { PaneNode } from '@deepseek-ai/dsh-client-ui-layout/src/client/panes.ts'
 import { en, zh, type LayoutLocaleKey } from '@deepseek-ai/dsh-client-ui-layout/src/client/locales.ts'
-import type {
-  SessionId, SessionListState, WorkspaceListState,
-} from '@deepseek-ai/dsh-client-runtime/client'
->>>>>>> abc9c2b937 (feat(console): add tmux-backed human terminals)
 
 // Session selection controls for the SessionProvider and useSessions stubs.
 const selectedSession = { current: 's-test' as SessionId | undefined }
@@ -39,21 +33,6 @@ type AttentionSnapshot = Parameters<Parameters<AppFrameProps['useSessionPendingI
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: AppFrameProps['useSessionPendingInteraction'] = selector => selector(noAttention)
 
-<<<<<<< HEAD
-// Provider contract stub fed through the standard seat prop (the renderer
-// injects the real one in production): session mode renders children and
-// empty mode runs the empty branch.
-const SessionProviderStub: AppFrameProps['SessionProvider'] = ({ children, empty }) =>
-  selectedSession.current === undefined ? <>{empty?.() ?? null}</> : <>{children}</>
-
-
-=======
-// Render-prop contract stub fed through the standard seat prop (the renderer
-// injects the real one in production): session mode runs children(id), empty
-// mode runs the empty branch — the frame must work against exactly this
-// shape. Typed as the seat's own component type so the branded sessionId
-// parameter stays contract-checked.
->>>>>>> abc9c2b937 (feat(console): add tmux-backed human terminals)
 /** Observer stub: captures the callback so tests can fire resizes manually. */
 let fireResize: (() => void) | null = null
 class ResizeObserverStub {
@@ -98,54 +77,15 @@ function mountFrame(options: {
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
-<<<<<<< HEAD
-  const useSessions = ((sel: (s: SessionListState) => unknown) => {
-    const current = selectedSession.current
-    const sessionState = {
-      ids: current === undefined ? [] : [current],
-      byId: current === undefined
-        ? {}
-        : {
-          [current]: {
-            id: current,
-            displayTitle: 'Test',
-            running: false,
-            blank: selectedSessionBlank.current,
-            updatedAt: 1,
-            ...(selectedSessionTitle.current === undefined ? {} : { title: selectedSessionTitle.current }),
-          },
-        },
-      current,
-      phase: 'ready',
-    } as SessionListState
-    return sel(sessionState)
-  }) as never
   const workspaceState: WorkspaceSnapshot = {
-=======
-  const workspaceState: WorkspaceListState = {
->>>>>>> abc9c2b937 (feat(console): add tmux-backed human terminals)
     items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     ...(workspacesReady.current ? {} : { state: 'loading' as const, phase: 'pending' as const }),
   }
-<<<<<<< HEAD
-  const element = () => (
-    <AppFrame
-      useStore={hookOf(instance)}
-      actions={instance.actions}
-      renderSlot={renderSlot}
-      useSessions={useSessions}
-      useSessionPendingInteraction={useSessionPendingInteraction}
-      useWorkspaces={((sel: (s: WorkspaceSnapshot) => unknown) => sel(workspaceState)) as never}
-      SessionProvider={SessionProviderStub}
-      t={key => key === 'brand.localBuild' ? 'DSH Local Build' : key}
-    />
-  )
-=======
   const SessionProviderStub: AppFrameProps['SessionProvider'] = ({ sessionId, children, empty }) => {
     const selected = sessionId ?? selectedSession.current
     return selected === undefined || options.sessionUnavailable === true
       ? <>{empty?.() ?? null}</>
-      : <>{children(selected)}</>
+      : <>{children}</>
   }
   const element = () => {
     const current = selectedSession.current
@@ -161,6 +101,7 @@ function mountFrame(options: {
         running: false,
         blank: id === current ? selectedSessionBlank.current : false,
         updatedAt: 1,
+        ...(id === current && selectedSessionTitle.current !== undefined ? { title: selectedSessionTitle.current } : {}),
       }])),
       current,
       phase: 'ready',
@@ -172,7 +113,8 @@ function mountFrame(options: {
         actions={instance.actions}
         renderSlot={renderSlot}
         useSessions={useSessions}
-        useWorkspaces={((sel: (s: WorkspaceListState) => unknown) => sel(workspaceState)) as never}
+        useSessionPendingInteraction={useSessionPendingInteraction}
+        useWorkspaces={((sel: (s: WorkspaceSnapshot) => unknown) => sel(workspaceState)) as never}
         SessionProvider={SessionProviderStub}
         selectSession={options.selectSession ?? ((sessionId) => { selectedSession.current = sessionId })}
         stageSession={options.stageSession ?? (() => () => {})}
@@ -180,7 +122,6 @@ function mountFrame(options: {
       />
     )
   }
->>>>>>> abc9c2b937 (feat(console): add tmux-backed human terminals)
   const utils = render(element())
   const frame = utils.container.firstElementChild as HTMLElement
   return { instance, frame, slotCalls, rerenderFrame: () => { utils.rerender(element()) }, ...utils }

@@ -24,6 +24,9 @@
       "path": "../../console/console-remote"
     },
     {
+      "path": "../../client/file-upload/tsconfig.client.json"
+    },
+    {
       "path": "../../credentials/credentials"
 
     },

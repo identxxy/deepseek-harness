@@ -150,7 +150,7 @@ describe('web e2e: settings modal and General preferences', () => {
     const mobileTripwire = watchConsole(mobilePage)
     onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-mobile-settings-navigation'))
     try {
-      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       await mobilePage.getByRole('button', { name: '设置', exact: true }).click()
       const dialog = mobilePage.getByRole('dialog', { name: '设置' })
@@ -195,7 +195,7 @@ describe('web e2e: settings modal and General preferences', () => {
   it('stores Permission as the default for future sessions without changing an existing session', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-permission'))
     const existing = scaffold.ctx.sessions.create(SessionId('settings-permission-before'))
-    expect(existing.events.find(event => event.type === 'permission/preset')?.data)
+    expect(existing.snapshotEvents().find(event => event.type === 'permission/preset')?.data)
       .toEqual({ preset: 'workspace-write' })
 
     await page.getByRole('button', { name: '设置', exact: true }).click()
@@ -211,11 +211,11 @@ describe('web e2e: settings modal and General preferences', () => {
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('permission:')
     expect(document).toContain('defaultPreset: read-only')
-    expect(existing.events.find(event => event.type === 'permission/preset')?.data)
+    expect(existing.snapshotEvents().find(event => event.type === 'permission/preset')?.data)
       .toEqual({ preset: 'workspace-write' })
 
     const created = scaffold.ctx.sessions.create(SessionId('settings-permission-after'))
-    expect(created.events.map(event => [event.type, event.data])).toEqual([
+    expect(created.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'read-only' }],
       ['sandbox/mode', { mode: 'read-only' }],
       ['approval/policy', { policy: 'ask' }],
@@ -232,7 +232,7 @@ describe('web e2e: settings modal and General preferences', () => {
     const confirmedDocument = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(confirmedDocument).toContain('defaultPreset: danger-full-access')
     const confirmed = scaffold.ctx.sessions.create(SessionId('settings-permission-confirmed'))
-    expect(confirmed.events.map(event => [event.type, event.data])).toEqual([
+    expect(confirmed.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'danger-full-access' }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
       ['approval/policy', { policy: 'never' }],

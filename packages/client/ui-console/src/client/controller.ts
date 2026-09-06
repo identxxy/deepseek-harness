@@ -5,8 +5,8 @@ import type {
   ConsoleRemoteCreateRequest, ConsoleRemoteFailure, ConsoleRemoteObservation,
   ConsoleRemoteResult, ConsoleRemoteSize, ConsoleRemoteSnapshot,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 
 type ConsoleRemote = ClientRemote['consoles']

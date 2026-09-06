@@ -54,6 +54,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
     const script = `
       import { createServer } from 'node:http'
       import * as cordis from '@deepseek-ai/cordis'
+      import * as zod from 'zod'
 
       const urls = ${JSON.stringify(urls)}
       const { Context } = cordis
@@ -94,18 +95,18 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       await host.plugin(AgentRegistry)
       await host.plugin(TypertRemoteService)
       await host.plugin(SessionProjectionRegistry)
-      const consoleAccess = { consoleId: 'built-console', capability: 'built-capability' }
+      const consoleAccess = { attachmentId: 'built-attachment', capability: 'built-capability' }
       const writes = []
-      const signals = []
-      let stopped = false
+      const sizes = []
+      let terminated = false
       let consoleWaitStarted = false
       let consoleHostObservedAbort = false
       host.provide('consoles', {
-        snapshot(access) {
+        attachmentSnapshot(access) {
           if (access.capability !== consoleAccess.capability) {
             throw new ConsoleError('ACCESS_DENIED', 'denied')
           }
-          return { id: consoleAccess.consoleId, workspaceId: 'workspace', cwd: '/workspace', pid: 42, size: { rows: 24, cols: 80 }, status: { kind: 'running' }, oldestOutputByte: 0, nextOutputByte: 2 }
+          return { id: consoleAccess.attachmentId, consoleId: 'built-console', size: { rows: 24, cols: 80 }, status: { kind: 'running' }, oldestOutputByte: 0, nextOutputByte: 2 }
         },
         readOutput(_access, fromByte) { return { kind: 'data', data: fromByte === 0 ? Uint8Array.from([0, 255]) : new Uint8Array(), fromByte, nextByte: fromByte === 0 ? 2 : fromByte, availableThroughByte: 2 } },
         waitOutput(_access, _fromByte, signal) {
@@ -116,11 +117,10 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
           }, { once: true }))
         },
         write(_access, data) { writes.push(data); return Promise.resolve() },
-        resize() { return Promise.resolve() },
-        signal(_access, signal) { signals.push(signal); return Promise.resolve({ delivered: true, targetPgid: 7 }) },
-        stop() { stopped = true; return Promise.resolve() },
+        resize(_access, size) { sizes.push(size); return Promise.resolve() },
+        terminate() { terminated = true; return Promise.resolve() },
       })
-      await host.plugin(ConsoleRemoteService, { maxPollWaitMs: 500, maxWriteBytes: 16 })
+      await host.plugin(ConsoleRemoteService, { maxPollWaitMs: 500, maxWriteBytes: 16, maxTitleBytes: 128 })
       host.typert.register(CONSOLE_TYPERT)
       await host.plugin(GoalService)
       host.typert.register(TYPERT)
@@ -194,6 +194,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         if (handoff === undefined) throw new Error('missing Client bundle handoff ' + id)
         return handoff.factory(specifier => {
           if (specifier === '@deepseek-ai/cordis') return cordis
+          if (specifier === 'zod') return zod
           throw new Error('unexpected Client external ' + specifier)
         })
       }
@@ -228,7 +229,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       const agentContext = client.extend({ builtAgentId: scopedAgent.id })
       const scopedResult = await agentContext.remote.goals.create({ objective: 'scoped goal', maxGoalRounds: 3 })
       const consoleRead = await client.remote.consoles.read({ access: consoleAccess, fromByte: 0, waitMs: 10 })
-      const consoleDenied = await client.remote.consoles.snapshot({ access: { ...consoleAccess, capability: 'wrong' } })
+      const consoleDenied = await client.remote.consoles.attachmentSnapshot({ access: { ...consoleAccess, capability: 'wrong' } })
       const consoleAbortController = new AbortController()
       const consoleAbortPromise = client.remote.consoles.read({ access: consoleAccess, fromByte: 2, waitMs: 500 }, consoleAbortController.signal).then(result => {
         if (!result.ok) throw result.error
@@ -238,11 +239,11 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       consoleAbortController.abort(new Error('built caller abort'))
       let consoleCallerAborted = false
       try { await consoleAbortPromise } catch { consoleCallerAborted = true }
-      await client.remote.consoles.signal({ access: consoleAccess, signal: 'SIGINT' })
-      let consoleInvalidSignalRejected = false
-      try { await client.remote.consoles.signal({ access: consoleAccess, signal: 'SIGQUIT' }) } catch { consoleInvalidSignalRejected = true }
+      await client.remote.consoles.resize({ access: consoleAccess, size: { rows: 30, cols: 100 } })
+      let consoleInvalidSizeRejected = false
+      try { await client.remote.consoles.resize({ access: consoleAccess, size: { rows: 'invalid', cols: 80 } }) } catch { consoleInvalidSizeRejected = true }
       await client.remote.consoles.write({ access: consoleAccess, data: 'hello' })
-      await client.remote.consoles.stop({ access: consoleAccess })
+      await client.remote.consoles.terminate({ consoleId: 'built-console' })
       const result = {
         invalidRejected,
         rootResult: rootResult.value,
@@ -250,16 +251,16 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         scopedResult: scopedResult.value,
         rootGoal: host.goals.get(rootAgent)?.objective,
         scopedGoal: host.goals.get(scopedAgent)?.objective,
-        rootEvents: rootAgent.session.events.length,
-        scopedEvents: scopedAgent.session.events.length,
+        rootEvents: rootAgent.session.snapshotEvents().length,
+        scopedEvents: scopedAgent.session.snapshotEvents().length,
         consoleRead: consoleRead.value,
         writes,
-        stopped,
+        terminated,
         consoleDenied: consoleDenied.value,
         consoleCallerAborted,
         consoleHostObservedAbort,
-        consoleInvalidSignalRejected,
-        signals,
+        consoleInvalidSizeRejected,
+        sizes,
       }
 
       await client.fiber.dispose()
@@ -282,14 +283,14 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedGoal: string
       rootEvents: number
       scopedEvents: number
-      consoleRead: { ok: true; value: { output: { dataBase64: string }; console: { pid?: number } } }
+      consoleRead: { ok: true; value: { output: { dataBase64: string }; attachment: { consoleId: string } } }
       writes: string[]
-      stopped: boolean
+      terminated: boolean
       consoleDenied: { ok: false; error: { code: string } }
       consoleCallerAborted: boolean
       consoleHostObservedAbort: boolean
-      consoleInvalidSignalRejected: boolean
-      signals: string[]
+      consoleInvalidSizeRejected: boolean
+      sizes: { rows: number; cols: number }[]
     }
     expect(output).toMatchObject({
       invalidRejected: true,
@@ -300,14 +301,14 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedGoal: 'scoped goal',
       rootEvents: 2,
       scopedEvents: 1,
-      consoleRead: { ok: true, value: { output: { dataBase64: 'AP8=' }, console: {} } },
+      consoleRead: { ok: true, value: { output: { dataBase64: 'AP8=' }, attachment: { consoleId: 'built-console' } } },
       writes: ['hello'],
-      stopped: true,
+      terminated: true,
       consoleDenied: { ok: false, error: { code: 'ACCESS_DENIED' } },
       consoleCallerAborted: true,
       consoleHostObservedAbort: true,
-      consoleInvalidSignalRejected: true,
-      signals: ['SIGINT'],
+      consoleInvalidSizeRejected: true,
+      sizes: [{ rows: 30, cols: 100 }],
     })
     expect(output.rootResult.ref.id).toMatch(/^goal-/)
     expect(output.scopedResult.ref.id).toMatch(/^goal-/)

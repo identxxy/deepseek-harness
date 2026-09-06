@@ -1,6 +1,26 @@
+---
+description: "通过授权 Remote 请求访问 Console 目录与连接操作。"
+kind: "package-reference"
+---
 # @deepseek-ai/dsh-console-remote
 
 [English](README.md) | 中文
+
+## 概述
+
+通过授权 Remote 请求访问 Console 目录与连接操作。
+
+## 目录
+
+- [使用此包](#use-this-package)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用此包
 
 面向持久 Human Terminal Console 的 Remote Consumer。它在 `consoles` wire namespace 下暴露 catalog `list`、`create`、`snapshot`、`rename`、archive/restore、显式 `terminate`，以及临时 attachment `attach`、`attachmentSnapshot`、long-poll `read`、`write`、`resize` 与 `detach`。
 
@@ -8,6 +28,7 @@
 
 生成的 `./typert` 与 `./remote` face 会在运行时 import `zod`。因此即使 `src` 不 import 它，本包仍直接声明该依赖；限定在该 workspace 的 Knip 例外只覆盖这些生成产物。
 
+<a id="model-experience"></a>
 ## 模型体验
 
 ### 已授权 Console 传输
@@ -26,5 +47,13 @@
 
 ## 已知限制与延期工作
 
+<a id="known-limitations-and-deferred-work"></a>
 - 本包不提供外部 identity authentication。部署必须通过已认证入口保护浏览器 transport，例如 shipped device-auth composition。
 - Terminal 输出使用有界 long-poll response。未来 duplex carrier 必须保留 attachment capability、byte cursor、cancellation 与 teardown 语义。
+
+未发布运行时 invariant companion，因为Remote 投影不拥有持久工作负载状态。
+
+<a id="dev-note"></a>
+### 开发备注
+
+无。

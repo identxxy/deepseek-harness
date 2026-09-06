@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConsoleCatalogState } from '../src/client/controller.ts'
 
@@ -36,6 +36,8 @@ vi.mock('@xterm/xterm', () => ({
 }))
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit = vi.fn() } }))
 
+import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { zh } from '../src/client/locales.ts'
 import { TerminalPane } from '../src/client/TerminalPane.tsx'
 
 class ResizeObserverMock {
@@ -58,7 +60,10 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 })
 
-afterEach(() => { vi.unstubAllGlobals() })
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('TerminalPane', () => {
   it('attaches xterm, streams output, and detaches only the Web Client on unmount', async () => {
@@ -90,7 +95,7 @@ describe('TerminalPane', () => {
       detach: vi.fn(async () => {}),
     }
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector(catalog))
-    const view = render(<TerminalPane
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]}
       actor={{ kind: 'console', id: 'console-1' }}
       paneId="pane-1"
       active
@@ -129,7 +134,7 @@ describe('TerminalPane', () => {
       refresh: vi.fn(async () => {}),
     }
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector(catalog))
-    const view = render(<TerminalPane actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active={false}
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active={false}
       mobile={false} controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     await waitFor(() => { expect(screenPhase(view.container)).toBe('ended') })
     expect(controller.refresh).toHaveBeenCalledOnce()
@@ -142,7 +147,7 @@ describe('TerminalPane', () => {
     terminalMocks.resize?.([], {} as ResizeObserver)
     terminalMocks.resize?.([], {} as ResizeObserver)
     await waitFor(() => { expect(controller.resize).toHaveBeenCalledWith(access, { rows: 40, cols: 120 }) })
-    view.rerender(<TerminalPane actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
+    view.rerender(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
       mobile={false} controller={controller as never} useConsoleCatalog={useConsoleCatalog} />)
     expect(terminalMocks.instances[0]?.focus).toHaveBeenCalled()
   })
@@ -161,7 +166,7 @@ describe('TerminalPane', () => {
       write: vi.fn(), resize: vi.fn(), detach: vi.fn(async () => {}),
     }
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector(catalog))
-    const view = render(<TerminalPane actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
       mobile={false} controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     await waitFor(() => { expect(screenPhase(view.container)).toBe('ended') })
     await waitFor(() => {
@@ -179,14 +184,14 @@ describe('TerminalPane', () => {
     }
     const emptyCatalog = { phase: 'ready' as const, items: [], connectionEpoch: 0 }
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector(emptyCatalog))
-    const first = render(<TerminalPane actor={{ kind: 'console', id: 'long-console-id' }} paneId="pane-1" active
+    const first = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'long-console-id' }} paneId="pane-1" active
       mobile={false} controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     await waitFor(() => { expect(first.getByRole('alert').textContent).toBe('attach failed') })
-    expect(first.getByText('Terminal long-con')).toBeTruthy()
+    expect(first.getByText('终端 long-con')).toBeTruthy()
     first.unmount()
 
     controller.attach.mockRejectedValueOnce(new Error('plain failure'))
-    const plain = render(<TerminalPane actor={{ kind: 'console', id: 'plain' }} paneId="pane-plain" active
+    const plain = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'plain' }} paneId="pane-plain" active
       mobile={false} controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     await waitFor(() => { expect(plain.getByRole('alert').textContent).toBe('plain failure') })
     plain.unmount()
@@ -194,7 +199,7 @@ describe('TerminalPane', () => {
     let resolveAttach!: (value: unknown) => void
     controller.attach.mockImplementationOnce(() => new Promise((resolve) => { resolveAttach = resolve }))
     controller.detach.mockResolvedValueOnce(undefined)
-    const late = render(<TerminalPane actor={{ kind: 'console', id: 'late' }} paneId="pane-2" active
+    const late = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'late' }} paneId="pane-2" active
       mobile={false} controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     late.unmount()
     resolveAttach({ access: { attachmentId: 'late', capability: 'late' }, attachment: { oldestOutputByte: 0 } })
@@ -217,7 +222,7 @@ describe('TerminalPane', () => {
       detach: vi.fn(async () => { throw new Error('detach failed') }),
     }
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector(catalog))
-    const view = render(<TerminalPane actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
       mobile controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     fireEvent.click(view.getByRole('button', { name: 'Esc' }))
     terminalMocks.instances[0]!.emitData('before-attach')
@@ -240,7 +245,7 @@ describe('TerminalPane', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const controller = terminalController(write.promise)
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector(catalog))
-    const view = render(<TerminalPane actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
       mobile controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     await waitFor(() => { expect(controller.attach).toHaveBeenCalledOnce() })
     fireEvent.click(view.getByRole('button', { name: 'Esc' }))
@@ -262,12 +267,12 @@ describe('TerminalPane', () => {
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector({ ...catalog, connectionEpoch: epoch }))
     const props = { actor: { kind: 'console' as const, id: 'console-1' }, paneId: 'pane-1', active: true, mobile: true,
       controller: controller as never, useConsoleCatalog: useConsoleCatalog as never }
-    const view = render(<TerminalPane {...props} />)
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} {...props} />)
     await waitFor(() => { expect(controller.attach).toHaveBeenCalledOnce() })
     fireEvent.click(view.getByRole('button', { name: 'Esc' }))
     await waitFor(() => { expect(controller.write).toHaveBeenCalledOnce() })
     epoch = 1
-    view.rerender(<TerminalPane {...props} />)
+    view.rerender(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} {...props} />)
     await waitFor(() => { expect(controller.attach).toHaveBeenCalledTimes(2) })
     expect(screenPhase(view.container)).toBe('running')
     write.reject(new Error('old write failure'))
@@ -295,10 +300,10 @@ describe('TerminalPane', () => {
       actor: { kind: 'console' as const, id: 'console-1' }, paneId: 'pane-1', active: true, mobile: false,
       controller: controller as never, useConsoleCatalog: useConsoleCatalog as never,
     }
-    const view = render(<TerminalPane {...props} />)
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} {...props} />)
     await waitFor(() => { expect(controller.attach).toHaveBeenCalledOnce() })
     epoch = 1
-    view.rerender(<TerminalPane {...props} />)
+    view.rerender(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} {...props} />)
     await waitFor(() => { expect(controller.attach).toHaveBeenCalledTimes(2) })
     expect(controller.detach).toHaveBeenCalledWith({ attachmentId: 'attachment-1', capability: 'capability-1' })
     view.unmount()
@@ -314,7 +319,7 @@ describe('TerminalPane', () => {
       read: vi.fn(() => observation.promise), refresh: vi.fn(), write: vi.fn(), resize: vi.fn(), detach: vi.fn(async () => {}),
     }
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector(catalog))
-    const view = render(<TerminalPane actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} actor={{ kind: 'console', id: 'console-1' }} paneId="pane-1" active
       mobile={false} controller={controller as never} useConsoleCatalog={useConsoleCatalog as never} />)
     await waitFor(() => { expect(controller.read).toHaveBeenCalledOnce() })
     const terminal = terminalMocks.instances[0]!
@@ -343,11 +348,11 @@ describe('TerminalPane', () => {
     const useConsoleCatalog = (<S,>(selector: (state: ConsoleCatalogState) => S): S => selector({ ...catalog, connectionEpoch: epoch }))
     const props = { actor: { kind: 'console' as const, id: 'console-1' }, paneId: 'pane-1', active: true, mobile: false,
       controller: controller as never, useConsoleCatalog: useConsoleCatalog as never }
-    const view = render(<TerminalPane {...props} />)
+    const view = render(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} {...props} />)
     await waitFor(() => { expect(controller.read).toHaveBeenCalledOnce() })
     const oldTerminal = terminalMocks.instances[0]!
     epoch = 1
-    view.rerender(<TerminalPane {...props} />)
+    view.rerender(<TerminalPane t={key => ({ ...commonZh, ...zh })[key]} {...props} />)
     await waitFor(() => { expect(controller.attach).toHaveBeenCalledTimes(2) })
     oldObservation.resolve(endedObservation('late'))
     await act(async () => { await Promise.resolve() })

@@ -10,6 +10,8 @@ English | [中文](README.zh.md)
 
 React-free observable and snapshot-store primitives shared by Client controllers and renderer adapters. The package owns synchronous and animation-frame publication, Immer-backed updates, shallow equality, and optional browser persistence; React hook construction remains in `@deepseek-ai/dsh-client-ui-renderer`. Use it when Client state must publish stable snapshots without depending on React.
 
+`persist` accepts a whole-state storage key or a `{ name, select, merge }` specification. `select` writes only durable fields; `merge` validates parsed storage data and combines it with fresh initial state. Pane attachment capabilities and other transient state can therefore remain memory-only.
+
 ## Table of Contents
 
 - [Model Experience](#model-experience)
@@ -43,3 +45,5 @@ None; the stores neither assemble nor send model requests.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The package exports a library engine and creates no process-global state; each store instance is covered by its owning tests.

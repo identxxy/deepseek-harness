@@ -1,6 +1,26 @@
+---
+description: "在浏览器中使用 Human Terminal，包括 tmux 会话、分屏与移动终端控件。"
+kind: "package-reference"
+---
 # @deepseek-ai/dsh-client-ui-console
 
 [English](README.md) | 中文
+
+## 概述
+
+在浏览器中使用 Human Terminal，包括 tmux 会话、分屏与移动终端控件。
+
+## 目录
+
+- [使用此包](#use-this-package)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用此包
 
 面向 tmux-backed Human Terminal 的浏览器插件。它负责 Console catalog 镜像、临时 attachment capability、xterm renderer、Workspace 导航 row、创建操作、生命周期菜单和手机 terminal 辅助键栏。关闭 pane 或卸载浏览器插件只 detach Web tmux Client；archive 保持 workload 运行，而确认 terminate 会删除该 Console 的导航 row 与所有 pane。
 
@@ -10,6 +30,7 @@ Host 会把必填部署配置 `catalogRefreshIntervalMs` 注入浏览器 bootstr
 
 每个 attachment 的 input write 严格 FIFO。一次结果不确定的 write failure 会 poison 对应 write lane，后续 command fragment 会被拒绝，而不会接在提交状态未知的前缀之后发送。Resize request 串行执行，排队尺寸可以合并为最新值。即使 carrier 忽略已有 signal，每个 attachment Remote wait 也具有 browser-side cancellation。Pane cleanup 与 plugin dispose 最多共享一次 detach Remote 调用；dispose 会 memoize 同一 cleanup 结果，取消卡住的 attach、read、write、resize 和 detach 等待，并只在所有已追踪 browser work 本地收敛后结束。Dispose 开始后，public detach 只能 join 已有 detach 或观察已经 detached 的 attachment；unknown access 会被拒绝，不会创建 lane 或 Remote work。底层 carrier promise 如果稍后 reject，仍会被消费。
 
+<a id="model-experience"></a>
 ## 模型体验
 
 ### Human Terminal 浏览器界面
@@ -28,6 +49,14 @@ Host 会把必填部署配置 `catalogRefreshIntervalMs` 注入浏览器 bootstr
 
 ## 已知限制与延期工作
 
+<a id="known-limitations-and-deferred-work"></a>
 - Terminal 输出目前使用有界 long polling，而不是 duplex 浏览器 stream。
 - 多个 Web 与原生 tmux Client 可以同时输入；UI 不声称提供独占控制。
 - 第一版的重命名与终止确认使用浏览器原生 dialog。
+
+未发布运行时 invariant companion，因为浏览器插件不拥有 Host 侧关系。
+
+<a id="dev-note"></a>
+### 开发备注
+
+无。

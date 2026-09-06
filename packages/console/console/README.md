@@ -1,13 +1,34 @@
+---
+description: "Create and manage durable Human Terminals independently of Agent-owned terminal sessions."
+kind: "package-reference"
+---
 # @deepseek-ai/dsh-console
 
 English | [中文](README.zh.md)
 
-Service Definition for `ctx.consoles`. It opens a configured human shell in a registered workspace and returns an opaque id plus a bearer capability. Every later operation requires both values; unknown ids and incorrect capabilities return the same `ACCESS_DENIED` error.
+## Summary
 
-Snapshots expose workspace, cwd, pid, dimensions, status, and absolute output offsets. They never expose the capability. Output reads are repeatable and cursor-based: retained bytes arrive in bounded pages, expired cursors return an explicit gap, and future or invalid cursors fail with `INVALID_CURSOR`. Cancellable waits atomically return the same bounded page with its console snapshot when output or terminal state changes.
+Create and manage durable Human Terminals independently of Agent-owned terminal sessions.
 
-`stop()` terminates the complete terminal session and removes the record only after quiescence. Process exit retains state and output until an authorized caller stops the record.
+## Table of Contents
 
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
+
+The `ctx.consoles` Service Definition manages durable Console workloads and ephemeral viewer attachments separately. Catalog operations list, create, rename, archive, restore, and terminate workloads under the deployment’s authenticated ingress. Each attachment receives its own id and bearer capability; terminal I/O requires both.
+
+Workload snapshots expose Workspace, cwd, title, creation time, archive state, and process status. Attachment snapshots expose terminal dimensions, process status, and absolute output offsets without the capability. Cursor-based output reads return bounded pages or explicit gaps; invalid cursors fail with `INVALID_CURSOR`.
+
+`detach()` releases one viewer. `terminate()` ends the workload and its attachments. See the [Console subsystem](../../../docs/subsystems/console.md) for identity and lifetime semantics.
+
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Host console state
@@ -26,4 +47,12 @@ Independent of model requests: the package never changes a request prefix.
 
 ## Known Limitations and Deferred Work
 
-- The seam has no listing, attachment, control lease, generic program launcher, or Agent ownership API. Those consumers require separate product contracts.
+<a id="known-limitations-and-deferred-work"></a>
+- The seam provides no exclusive input lease: concurrent viewers may write to the same workload.
+
+No runtime invariant companion is published because the abstract Console service owns no provider state.
+
+<a id="dev-note"></a>
+### Dev Note
+
+None.

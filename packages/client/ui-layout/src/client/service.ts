@@ -31,9 +31,16 @@ export interface ILayout {
   openDetails(): void
   /** Close the details panel. */
   closeDetails(): void
-  /** Replace the active pane with an addressed product actor. */
+  /**
+   * Replace the active pane with an addressed product actor.
+   * @param actor - Agent Session or Console to display.
+   */
   openActor(actor: ActorRef): void
-  /** Add an addressed product actor beside the active pane. */
+  /**
+   * Add an addressed product actor beside the active pane.
+   * @param actor - Agent Session or Console to display.
+   * @param direction - Axis along which the active pane is split.
+   */
   openActorInSplit(actor: ActorRef, direction: PaneSplitDirection): void
   /**
    * Remove pane occurrences absent from one actor kind's ready, complete catalog.
@@ -88,12 +95,19 @@ export class LayoutController implements ILayout {
     this.#require().closeDetails()
   }
 
-  /** Replace the active pane with an addressed product actor. */
+  /**
+   * Replace the active pane with an addressed product actor.
+   * @param actor - Agent Session or Console to display.
+   */
   openActor(actor: ActorRef): void {
     this.#require().openActor(actor, layoutId('pane'))
   }
 
-  /** Add an addressed product actor beside the active pane. */
+  /**
+   * Add an addressed product actor beside the active pane.
+   * @param actor - Agent Session or Console to display.
+   * @param direction - Axis along which the active pane is split.
+   */
   openActorInSplit(actor: ActorRef, direction: PaneSplitDirection): void {
     this.#require().splitActor(actor, direction, layoutId('split'), layoutId('pane'))
   }

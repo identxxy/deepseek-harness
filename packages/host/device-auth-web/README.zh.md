@@ -1,6 +1,26 @@
+---
+description: "通过设备注册、恢复凭据与浏览器认证保护远程 Web 访问。"
+kind: "package-bundle"
+---
 # @deepseek-ai/dsh-host-device-auth-web
 
 [English](README.md) | 中文
+
+## 概述
+
+通过设备注册、恢复凭据与浏览器认证保护远程 Web 访问。
+
+## 目录
+
+- [使用此包](#use-this-package)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用此包
 
 可选 Profile Bundle 与 Consumer 插件，占据 WebServer 入口席位，通过 `ctx.deviceAuth` 保护每个远程 HTTP 请求和 WebSocket upgrade。其 [`cordis.patch.yml`](cordis.patch.yml) 以两条 runtime row 安装 durable provider 与本 Consumer；两条 row 都通过本 bundle 的 package export 解析，因此从本地 checkout 安装时无需向 profile 增加其他 dependency。provider composition 使用一年滚动 browser-session idle lifetime 与 30 天 renewal window，永久 device token 则没有 TTL。它拥有远程路由 `/auth/device/enroll`、`/auth/device/login` 和 `/auth/device/logout`，以及仅限本机的 `/auth/device/admin` 路由。
 
@@ -32,6 +52,7 @@ bundle 不包含部署值。用户 profile 需要在自己的 `cordis.patch.yml`
 
 本地旁路要求 TCP peer 与 Host 名同时是 loopback。来自 loopback tunnel peer 的 public Host 仍需认证。远程不安全方法和所有远程 upgrade 都要求精确配置的 Origin。只有 Origin 缺失时，登录和注册表单 POST 才接受精确同源的 Referer；这些表单页面会发送该 Referer，但不会将其泄露到跨源请求。未认证顶层 HTML 导航重定向到登录；asset 与 API 得到 401。Host 或请求来源违规得到 403。登录和注册页完全自包含，携带认证状态的响应禁止缓存。
 
+<a id="model-experience"></a>
 ## 模型体验
 
 ### 设备认证 Web 入口
@@ -50,5 +71,13 @@ bundle 不包含部署值。用户 profile 需要在自己的 `cordis.patch.yml`
 
 ## 已知限制与延期工作
 
+<a id="known-limitations-and-deferred-work"></a>
 - bundle 要求已有 Web composition 提供 WebServer 与 storage-domain service。
 - 永久凭据是可复制 bearer material，不是硬件证明。
+
+未发布运行时 invariant companion，因为请求准入由 ingress handler 直接强制执行。
+
+<a id="dev-note"></a>
+### 开发备注
+
+无。

@@ -56,7 +56,7 @@ describe('device auth Profile Bundle', () => {
     expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-device-auth-domain')
     for (const peer of [
       '@deepseek-ai/cordis', '@deepseek-ai/dsh-host-webserver',
-      '@deepseek-ai/dsh-invariants', '@deepseek-ai/dsh-storage-domain',
+      '@deepseek-ai/dsh-storage-domain',
     ]) expect(manifest.peerDependencies).toHaveProperty(peer)
 
     const patchSource = readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8')

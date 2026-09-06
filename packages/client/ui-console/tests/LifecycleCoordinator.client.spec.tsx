@@ -21,7 +21,7 @@ const running = (id: string, archived = false): ConsoleRemoteSnapshot => ({
 
 const hook = (state: ConsoleCatalogState) => <S,>(selector: (value: ConsoleCatalogState) => S): S => selector(state)
 const emptyHook = <S,>(selector: (state: never) => S): S => selector({} as never)
-const rootProps = { useSessions: emptyHook, useWorkspaces: emptyHook }
+const rootProps = { useSessionPendingInteraction: emptyHook, useSessions: emptyHook, useWorkspaces: emptyHook }
 
 describe('ConsoleLifecycleCoordinator', () => {
   it.each(['cold', 'loading', 'error'] as const)('does not reconcile an incomplete %s catalog', (phase) => {

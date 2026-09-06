@@ -1,6 +1,26 @@
+---
+description: "使用 tmux 让 Human Terminal 工作负载在浏览器断开和 Host 重启后继续运行。"
+kind: "package-reference"
+---
 # @deepseek-ai/dsh-console-tmux
 
 [English](README.md) | 中文
+
+## 概述
+
+使用 tmux 让 Human Terminal 工作负载在浏览器断开和 Host 重启后继续运行。
+
+## 目录
+
+- [使用此包](#use-this-package)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用此包
 
 `ctx.consoles` 的持久 Human Terminal 提供方。每个 Console 对应配置的专属 tmux server 上的一个 session。DSH 生成的 session name 与 versioned tmux user option 保存稳定 Console identity、Workspace identity、working directory、title、creation time 与 archive state。提供方启动时只扫描该专属 server，并忽略没有完整匹配 DSH name 与 metadata record 的 session。
 
@@ -10,6 +30,7 @@ Console workload 的生命周期长于 browser attachment 与 Host process。每
 
 Create 是 publication transaction：创建 detached session、配置 window-size policy、写 metadata、读回 metadata，随后才发布 Console。失败 transaction 只尝试 kill 其本次新分配的 DSH session。Rename 与 archive mutation 也只在 metadata read-back 后发布。未知、损坏、不匹配或不支持的 metadata 不会被接管或删除。
 
+<a id="model-experience"></a>
 ## 模型体验
 
 ### 持久 Human Terminal 执行
@@ -28,6 +49,14 @@ Create 是 publication transaction：创建 detached session、配置 window-siz
 
 ## 已知限制与延期工作
 
+<a id="known-limitations-and-deferred-work"></a>
 - 该提供方只支持 tmux platform。不支持的 Host composition 必须省略它，因此也不会暴露 Human Terminal 创建能力。
 - tmux 允许多个 Client 同时写入。提供方不声称存在 native Kitty attachment 可以绕过的独占 controller。
 - Raw terminal output 只在每个 ephemeral Web attachment 中保留。重新 attach 会从 tmux 获取当前 screen state，而不是 replay durable byte log。
+
+未发布运行时 invariant companion，因为tmux 在 Host 事件流之外拥有工作负载的存活状态。
+
+<a id="dev-note"></a>
+### 开发备注
+
+无。

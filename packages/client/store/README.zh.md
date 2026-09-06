@@ -10,6 +10,8 @@ kind: "package-library"
 
 供 Client controller 与 renderer adapter 共用的不依赖 React 的 observable 和 snapshot-store 基础设施。本包负责同步与 animation-frame 发布、基于 Immer 的更新、浅比较和可选的浏览器持久化；React hook 的构造仍属于 `@deepseek-ai/dsh-client-ui-renderer`。当 Client 状态必须在不依赖 React 的情况下发布稳定 snapshot 时，请使用它。
 
+`persist` 接受完整状态的存储键，或 `{ name, select, merge }` 说明。`select` 仅写入持久字段；`merge` 验证解析后的存储数据，并将其与新的初始状态合并。因此，窗格连接 capability 和其他瞬态数据可以只保留在内存中。
+
 ## 目录
 
 - [模型体验](#model-experience)
@@ -43,3 +45,5 @@ kind: "package-library"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。本包只导出库引擎，不创建进程级状态；每个 store 实例由其所属测试覆盖。

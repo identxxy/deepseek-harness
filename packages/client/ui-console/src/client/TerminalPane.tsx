@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import type { ConsoleRemoteAttachmentAccess, ConsoleRemoteSnapshot } from '@deepseek-ai/dsh-api-remotes/client'
-import type { PropsHooks } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsHooks, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConsolePaneOwnerProps } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ConsoleCatalogState, ConsoleClient } from './controller.ts'
 import css from './TerminalPane.module.css'
@@ -23,15 +23,9 @@ export type TerminalPaneProps =
   & ConsolePaneOwnerProps
   & Omit<TerminalPaneInjected, 'hooks'>
   & PropsHooks<TerminalPaneInjected['hooks']>
+  & PropsLocale<'console'>
 
 type PanePhase = 'attaching' | 'running' | 'ended' | 'error'
-
-const PHASE_LABEL: Record<PanePhase, string> = {
-  attaching: '正在连接',
-  running: '运行中',
-  ended: '已结束',
-  error: '错误',
-}
 
 function decodedBase64(value: string): Uint8Array {
   const binary = atob(value)
@@ -45,7 +39,7 @@ function shortId(id: string): string {
 }
 
 /** xterm renderer for one independent Web tmux Client attachment. */
-export function TerminalPane({ actor, active, mobile, controller, useConsoleCatalog }: TerminalPaneProps) {
+export function TerminalPane({ actor, active, mobile, controller, useConsoleCatalog, t }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const accessRef = useRef<ConsoleRemoteAttachmentAccess | null>(null)
@@ -162,21 +156,21 @@ export function TerminalPane({ actor, active, mobile, controller, useConsoleCata
   return (
     <div className={css.root} data-terminal-phase={phase}>
       <div className={css.statusBar}>
-        <span className={css.title}>{consoleSnapshot?.title ?? `Terminal ${shortId(actor.id)}`}</span>
+        <span className={css.title}>{consoleSnapshot?.title ?? `${t('terminal')} ${shortId(actor.id)}`}</span>
         <span className={css.path}>{consoleSnapshot?.cwd}</span>
-        <span className={css.phase}>{PHASE_LABEL[phase]}</span>
+        <span className={css.phase}>{t(phase)}</span>
       </div>
       <div ref={containerRef} className={css.terminal} />
       {diagnostic !== null ? <div className={css.error} role="alert">{diagnostic}</div> : null}
       {mobile ? (
-        <div className={css.mobileKeys} aria-label="终端按键">
-          <button type="button" onClick={() => { send('\x1b') }}>Esc</button>
-          <button type="button" onClick={() => { send('\t') }}>Tab</button>
+        <div className={css.mobileKeys} aria-label={t('terminalKeys')}>
+          <button type="button" onClick={() => { send('\x1b') }}>{t('escapeKey')}</button>
+          <button type="button" onClick={() => { send('\t') }}>{t('tabKey')}</button>
           <button type="button" onClick={() => { send('\x1b[D') }}>←</button>
           <button type="button" onClick={() => { send('\x1b[A') }}>↑</button>
           <button type="button" onClick={() => { send('\x1b[B') }}>↓</button>
           <button type="button" onClick={() => { send('\x1b[C') }}>→</button>
-          <button type="button" onClick={() => { send('\x03') }}>Ctrl-C</button>
+          <button type="button" onClick={() => { send('\x03') }}>{t('interruptKey')}</button>
         </div>
       ) : null}
     </div>

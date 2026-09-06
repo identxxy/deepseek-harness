@@ -12,6 +12,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime, TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 
 usePinnedBrowserLanguages('zh-CN')
@@ -29,6 +30,7 @@ function SidebarFrame({ renderSlot }: FrameProps) {
 async function bench() {
   const runtime = await SlotTestRuntime.create()
   runtime.releaseWorkspaceSource()
+  runtime.ctx.provide('layout', new LayoutController())
   const directoryPicker = {}
   const remote = new TestRemote(runtime.ctx)
   Object.assign(remote, { directoryPicker })

@@ -1,8 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { describe, expect, it } from 'vitest'
 import DeviceAuthService, { canonicalDevicePrincipal, DeviceAuthError } from '../src/index.ts'
-import * as DeviceAuthInvariant from '../src/invariant.ts'
 
 const principal = { issuer: 'https://issuer.example', subject: 'subject', email: ' owner@example.com ' }
 
@@ -34,13 +32,5 @@ describe('device-auth service definition', () => {
   it('rejects direct construction without a provider', () => {
     const Concrete = DeviceAuthService as unknown as new (ctx: Context) => DeviceAuthService
     expect(() => new Concrete(new Context())).toThrow('@deepseek-ai/dsh-device-auth requires a provider')
-  })
-})
-
-describe('device-auth invariant companion', () => {
-  it('registers the stateless seam under its package name', async () => {
-    const ctx = new Context()
-    await ctx.plugin(InvariantRegistry, { enabled: true })
-    await expect(ctx.plugin(DeviceAuthInvariant).await()).resolves.toBeDefined()
   })
 })

@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { ConsoleRemoteSnapshot } from '@deepseek-ai/dsh-api-remotes/client'
-import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarPrimaryActionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { WorkspaceActorRowsOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -18,6 +19,8 @@ import css from './Navigation.module.css'
 /** Browser actions supplied to Console navigation surfaces. */
 export interface ConsoleNavigationInjected {
   hooks: {
+    /** Observable Session catalog and current selection. */
+    sessions: HostObservable<SessionListState>
     /** Observable durable Console catalog. */
     consoleCatalog: HostObservable<ConsoleCatalogState>
   }
@@ -57,12 +60,20 @@ function report(action: string, error: unknown): void {
 export function NewTerminalAction({
   wide, useSessions, useWorkspaces, createAndOpen, t,
 }: NewTerminalActionProps) {
-  const currentSessionId = useSessions(state => state.current)
+  const sessions = useSessions(state => state)
+  const currentSessionId = sessions.current
   const targetWorkspaceId = useWorkspaces((state) => {
     const current = currentSessionId === undefined
       ? undefined
       : state.items.find(workspace => workspace.sessionIds.includes(currentSessionId))?.workspaceId
-    return current ?? state.recentWorkspaceId ?? state.items[0]?.workspaceId
+    const recent = [...state.items].sort((a, b) => {
+      const latest = (workspace: typeof a): number => Math.max(
+        Date.parse(workspace.createdAt),
+        ...workspace.sessionIds.map(id => sessions.byId[id]?.updatedAt ?? Number.NEGATIVE_INFINITY),
+      )
+      return latest(b) - latest(a)
+    })[0]?.workspaceId
+    return current ?? recent
   })
   const [creating, setCreating] = useState(false)
   const disabled = targetWorkspaceId === undefined || creating

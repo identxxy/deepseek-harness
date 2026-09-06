@@ -15,9 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import HttpServer, { renderIndexInjections, type WebIngressGate } from '../src/index.ts'
-import * as WebServerInvariant from '../src/invariant.ts'
 
 let root: string | undefined
 let context: Context | undefined
@@ -520,8 +518,6 @@ describe('real Loader composition', () => {
 
   it('owns ingress registration through a real Cordis effect lifecycle', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
-    await loaded.plugin(InvariantRegistry, { enabled: true }).await()
-    await loaded.plugin(WebServerInvariant).await()
     const gate: WebIngressGate = {
       handleHttp: () => ({ kind: 'allow' }),
       handleUpgrade: () => ({ kind: 'allow' }),

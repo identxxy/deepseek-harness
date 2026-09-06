@@ -1,7 +1,9 @@
 /** Human Terminal browser plugin: Console catalog service and xterm pane renderer. */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -38,7 +40,7 @@ function browserConfig(): Config {
 }
 
 /** Required services for Console RPC, pane rendering, and localized navigation. */
-export const inject = ['slots', 'remote', 'remote.consoles', 'locale', 'layout']
+export const inject = ['slots', 'remote', 'remote.consoles', 'locale', 'layout', 'sessions']
 
 /**
  * Install the browser Console service and terminal pane contribution.
@@ -73,7 +75,7 @@ export function apply(ctx: ClientContext): void {
     })
   })
   const navigation = (): ConsoleNavigationInjected => ({
-    hooks: { consoleCatalog: controller },
+    hooks: { consoleCatalog: controller, sessions: ctx.sessions.list },
     createAndOpen: async (workspaceId) => {
       const created = await controller.create({
         workspaceId,
@@ -115,6 +117,7 @@ export function apply(ctx: ClientContext): void {
   }, ConsoleRows))
   ctx.slots.inject('workspace.console', () => ctx.slots.register({
     name: 'workspace.console',
+    locale: NS,
     inject: () => ({ controller, hooks: { consoleCatalog: controller } }),
   }, TerminalPane))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({

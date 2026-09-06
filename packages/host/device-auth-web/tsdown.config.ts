@@ -1,8 +1,8 @@
 import { defineConfig } from 'tsdown'
 
-/** Build the Consumer, invariant, and package-local Provider entry. */
+/** Build the Consumer and package-local Provider entry. */
 export default defineConfig({
-  entry: ['lib/types/index.js', 'lib/types/invariant.js', 'lib/types/provider.js'],
+  entry: ['lib/types/index.js', 'lib/types/provider.js'],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',

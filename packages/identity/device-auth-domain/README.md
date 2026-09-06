@@ -1,9 +1,31 @@
+---
+description: "Persist device credentials and rolling browser sessions in domain storage."
+kind: "package-reference"
+---
 # @deepseek-ai/dsh-device-auth-domain
 
 English | [中文](README.zh.md)
 
+## Summary
+
+Persist device credentials and rolling browser sessions in domain storage.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Config](#config)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
+
 Durable `ctx.deviceAuth` provider over the `device_auth` storage domain. Permanent device credentials use a 32-byte secret, per-record salt, and scrypt; browser sessions use a separate 32-byte secret with SHA-256 and direct device-record lookup. A fresh login replaces the sole active session, while login never reflects the supplied permanent token. Token rotation durably replaces the permanent credential and removes the active session without creating another; the new token must pass through login before the device has an active session again. Rolling renewal extends the same session and secret. Teardown rejects new operations, drains admitted mutations, then closes the domain.
 
+<a id="config"></a>
 ## Config
 
 | Key | Type | Default | Meaning |
@@ -14,6 +36,7 @@ Durable `ctx.deviceAuth` provider over the `device_auth` storage domain. Permane
 
 Writes become authoritative only after storage durability. A failed write changes neither the in-memory view nor session-invalidation events. One DSH home supports one live writer; cross-process administration is not supported.
 
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Durable authentication state
@@ -32,4 +55,12 @@ Independent. Domain authentication reads and writes never change a model request
 
 ## Known Limitations and Deferred Work
 
+<a id="known-limitations-and-deferred-work"></a>
 - The provider does not bind credentials to hardware and does not provide multi-user ACLs. A copied permanent token remains usable until rotation or revocation.
+
+No runtime invariant companion is published because the storage transactions own device and session consistency.
+
+<a id="dev-note"></a>
+### Dev Note
+
+None.

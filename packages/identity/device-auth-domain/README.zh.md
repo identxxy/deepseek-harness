@@ -1,9 +1,31 @@
+---
+description: "在 domain 存储中持久保存设备凭据与滚动浏览器会话。"
+kind: "package-reference"
+---
 # @deepseek-ai/dsh-device-auth-domain
 
 [English](README.md) | 中文
 
+## 概述
+
+在 domain 存储中持久保存设备凭据与滚动浏览器会话。
+
+## 目录
+
+- [使用此包](#use-this-package)
+- [配置](#config)
+- [模型体验](#model-experience)
+- [已知限制与延后工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用此包
+
 基于 `device_auth` storage domain 的持久化 `ctx.deviceAuth` provider。永久设备凭据使用 32-byte secret、逐记录 salt 和 scrypt；浏览器 session 使用独立 32-byte secret、SHA-256 与直接 device-record lookup。新登录会替换唯一活跃 session，而登录绝不回显传入的永久 token。Token 轮换会持久替换永久凭据并删除活跃 session，但不创建新 session；设备必须通过登录使用新 token，才会再次拥有活跃 session。rolling renewal 延长同一 session 与 secret。teardown 拒绝新操作、drain 已接纳 mutation，然后关闭 domain。
 
+<a id="config"></a>
 ## 配置
 
 | Key | 类型 | 默认值 | 含义 |
@@ -14,6 +36,7 @@
 
 storage 持久化完成后写入才成为权威状态。失败写入不会改变内存 view，也不会发送 session 失效事件。一个 DSH home 只支持一个 live writer；不支持跨进程管理。
 
+<a id="model-experience"></a>
 ## 模型体验
 
 ### 持久认证状态
@@ -32,4 +55,12 @@ storage 持久化完成后写入才成为权威状态。失败写入不会改变
 
 ## 已知限制与延后工作
 
+<a id="known-limitations-and-deferred-work"></a>
 - provider 不把凭据绑定至硬件，也不提供多用户 ACL。复制的永久 token 在轮换或撤销前仍可使用。
+
+未发布运行时 invariant companion，因为存储事务负责设备与会话的一致性。
+
+<a id="dev-note"></a>
+### 开发备注
+
+无。

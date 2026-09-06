@@ -1,5 +1,12 @@
 /** Simplified Chinese Human Terminal copy and key source. */
 export const zh = {
+  attaching: '正在连接',
+  running: '运行中',
+  error: '错误',
+  terminalKeys: '终端按键',
+  escapeKey: 'Esc',
+  tabKey: 'Tab',
+  interruptKey: 'Ctrl-C',
   newTerminal: '新建终端',
   terminal: '终端',
   archived: '已归档',
@@ -22,6 +29,13 @@ export type ConsoleLocaleKey = keyof typeof zh
 
 /** English dictionary checked against the Chinese key set. */
 export const en = {
+  attaching: 'Connecting',
+  running: 'Running',
+  error: 'Error',
+  terminalKeys: 'Terminal keys',
+  escapeKey: 'Esc',
+  tabKey: 'Tab',
+  interruptKey: 'Ctrl-C',
   newTerminal: 'New terminal',
   terminal: 'Terminal',
   archived: 'Archived',

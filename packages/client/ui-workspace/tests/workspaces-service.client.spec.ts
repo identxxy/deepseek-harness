@@ -1,3 +1,5 @@
+import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
+import { LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -189,6 +191,9 @@ interface BenchOptions {
 
 function bench(options: BenchOptions = {}) {
   const ctx = new Context()
+  const layout = new LayoutController()
+  layout.attachActions(createLayoutStore().create().actions)
+  ctx.provide('layout', layout)
   const directoryPicker = new FakeDirectoryPicker()
   const workspaces = new FakeWorkspaces(options.workspaces ?? workspaceState([], [], 'pending'))
   const sessions = new FakeSessions(options.sessions ?? sessionState([], undefined, 'pending'))

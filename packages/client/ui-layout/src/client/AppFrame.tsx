@@ -40,8 +40,6 @@ export type AppFrameProps =
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode; mobileWidth?: number | undefined }) {
-  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
-
   return (
     <div className={css.centerCol} style={props.mobileWidth === undefined ? undefined : { width: props.mobileWidth }}>
       {props.children}
@@ -139,7 +137,7 @@ function ActorPane(props: PaneCanvasProps & { node: Extract<PaneNode, { kind: 'l
   const body = node.actor.kind === 'agent'
     ? (
       <SessionProvider sessionId={node.actor.id as SessionId} empty={() => <div className={css.paneUnavailable}>{t('sessionUnavailable')}</div>}>
-        {() => renderSlot('conversation', {})}
+        {renderSlot('conversation', {})}
       </SessionProvider>
     )
     : renderSlot('workspace.console', { actor: node.actor, paneId: node.id, active, mobile })
@@ -263,6 +261,8 @@ export function AppFrame({
   stageSession,
   t,
 }: AppFrameProps) {
+  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('localBuild')
+  const documentTitle = useSessions(s => s.current === undefined ? undefined : s.byId[s.current]?.title)
   const panels = useStore(s => s)
   const sessionsState = useSessions(s => s)
   const currentSession = useSessions(s => s.current)
@@ -403,7 +403,7 @@ export function AppFrame({
       data-mobile-view={singlePane ? mobileView : undefined}
       data-dragging={dragging || undefined}
     >
-      <DocumentTitle productTitle={productTitle} />
+      <DocumentTitle productTitle={productTitle} {...documentTitle === undefined ? {} : { title: documentTitle }} />
 
       <div className={css.sidebarCol}>
         {/* Render-site slot call with live layout output. Desktop close keeps
@@ -446,7 +446,7 @@ export function AppFrame({
               t={t}
             />
           )}</CenterColumn>
-        <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
+        <DetailsColumn><SessionProvider>{renderSlot('details', {})}</SessionProvider></DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}

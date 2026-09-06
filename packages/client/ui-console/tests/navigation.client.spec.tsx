@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ConsoleRemoteSnapshot } from '@deepseek-ai/dsh-api-remotes/client'
-import type { SessionId, WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const React = await import('react')
@@ -53,6 +54,7 @@ function navigation(): ConsoleNavigationInjected {
   ]
   return {
     hooks: {
+      sessions: { getSnapshot: () => ({ ids: [], byId: {}, phase: 'ready', current: undefined, subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined }), subscribe: () => () => {} },
       consoleCatalog: {
         getSnapshot: () => ({ phase: 'ready' as const, items, connectionEpoch: 0 }),
         subscribe: () => () => {},
@@ -74,7 +76,8 @@ describe('Console navigation', () => {
     const injected = navigation()
     render(<NewTerminalAction
       wide
-      useSessions={hook({ current: sid('s-alpha') }) as never}
+      useSessionPendingInteraction={hook(new Map()) as never}
+      useSessions={hook({ current: sid('s-alpha'), byId: {} }) as never}
       useWorkspaces={hook({
         items: [
           { workspaceId: wid('alpha'), sessionIds: [sid('s-alpha')] },
@@ -93,6 +96,7 @@ describe('Console navigation', () => {
   it('places active and archived Console rows in their requested browser seats', () => {
     const injected = navigation()
     const common = {
+      useSessionPendingInteraction: hook(new Map()) as never,
       useSessions: hook({}) as never,
       useWorkspaces: hook({}) as never,
       ...injected,
@@ -116,12 +120,13 @@ describe('Console navigation', () => {
     const injected = navigation()
     const base = {
       wide: false,
-      useSessions: hook({ current: undefined }) as never,
+      useSessionPendingInteraction: hook(new Map()) as never,
+      useSessions: hook({ current: undefined, byId: {} }) as never,
       ...injected,
       useConsoleCatalog: hook(injected.hooks.consoleCatalog.getSnapshot()),
       t: t as never,
     }
-    const view = render(<NewTerminalAction {...base} useWorkspaces={hook({ items: [], recentWorkspaceId: wid('recent') }) as never} />)
+    const view = render(<NewTerminalAction {...base} useWorkspaces={hook({ items: [{ workspaceId: wid('first'), sessionIds: [], createdAt: '2026-01-01' }, { workspaceId: wid('recent'), sessionIds: [], createdAt: '2026-01-02' }] }) as never} />)
     fireEvent.click(screen.getByRole('button', { name: 'New terminal' }))
     expect(injected.createAndOpen).toHaveBeenCalledWith(wid('recent'))
     await vi.waitFor(() => { expect(screen.getByRole('button', { name: 'New terminal' }).hasAttribute('disabled')).toBe(false) })
@@ -140,7 +145,8 @@ describe('Console navigation', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     render(<NewTerminalAction
       wide
-      useSessions={hook({ current: undefined }) as never}
+      useSessionPendingInteraction={hook(new Map()) as never}
+      useSessions={hook({ current: undefined, byId: {} }) as never}
       useWorkspaces={hook({ items: [{ workspaceId: wid('first'), sessionIds: [] }] }) as never}
       {...injected}
       useConsoleCatalog={hook(injected.hooks.consoleCatalog.getSnapshot())}
@@ -161,6 +167,7 @@ describe('Console navigation', () => {
     vi.spyOn(window, 'prompt').mockReturnValue('  Renamed terminal  ')
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const common = {
+      useSessionPendingInteraction: hook(new Map()) as never,
       useSessions: hook({}) as never, useWorkspaces: hook({}) as never, ...injected,
       useConsoleCatalog: hook(injected.hooks.consoleCatalog.getSnapshot()), t: t as never,
     }
@@ -207,6 +214,7 @@ describe('Console navigation', () => {
     const ended: ConsoleRemoteSnapshot = { ...consoleSnapshot('c-ended', 'alpha'), status: { kind: 'ended', reason: 'external' } }
     const archived = consoleSnapshot('c-archived', 'alpha', true)
     const common = {
+      useSessionPendingInteraction: hook(new Map()) as never,
       useSessions: hook({}) as never, useWorkspaces: hook({}) as never, ...injected,
       t: t as never,
     }

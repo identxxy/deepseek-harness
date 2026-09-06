@@ -1,6 +1,26 @@
+---
+description: "Use Human Terminals in the browser with tmux sessions, split panes, and mobile terminal controls."
+kind: "package-reference"
+---
 # @deepseek-ai/dsh-client-ui-console
 
 English | [中文](README.zh.md)
+
+## Summary
+
+Use Human Terminals in the browser with tmux sessions, split panes, and mobile terminal controls.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
 
 Browser plugin for tmux-backed Human Terminals. It owns the Console catalog mirror, ephemeral attachment capabilities, xterm renderer, Workspace navigation rows, creation action, lifecycle menus, and mobile terminal key bar. Closing a pane or unloading the browser plugin detaches only the Web tmux Client; archive leaves the workload running, while confirmed termination removes the navigation row and every pane for that Console.
 
@@ -10,6 +30,7 @@ The Host injects the required `catalogRefreshIntervalMs` deployment setting into
 
 Input writes are strictly FIFO per attachment. An uncertain write failure poisons that write lane so later command fragments are rejected instead of being sent after an unknown prefix. Resize requests are serialized and queued dimensions may coalesce to the newest size. Every attachment Remote wait has browser-side cancellation even when its carrier ignores the existing signal. Pane cleanup and plugin disposal share at most one detach Remote call; disposal memoizes one cleanup result, cancels hung attach, read, write, resize, and detach waits, and settles only after all tracked browser work reaches quiescence. Once disposal starts, public detach calls may only join an existing detach or observe an already detached attachment; unknown access is rejected without creating a lane or Remote work. The underlying carrier promises remain consumed if they reject later.
 
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Human Terminal browser surfaces
@@ -28,6 +49,14 @@ Independent of model requests: the package never changes a request prefix.
 
 ## Known Limitations and Deferred Work
 
+<a id="known-limitations-and-deferred-work"></a>
 - Terminal output currently uses bounded long polling rather than a duplex browser stream.
 - Concurrent Web and native tmux Clients may type at the same time; the UI does not claim exclusive control.
 - Rename and terminate confirmation use native browser dialogs in the first product version.
+
+No runtime invariant companion is published because the browser plugin owns no Host-side relationship.
+
+<a id="dev-note"></a>
+### Dev Note
+
+None.
