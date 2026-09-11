@@ -102,3 +102,10 @@ describe('pane tree', () => {
     expect(resizePaneSplit(root, 'split-1', 0.05)).toMatchObject({ ratio: 0.2 })
   })
 })
+
+describe('plugin panel actors', () => {
+  it('restores a plugin panel without treating it as an Agent or Console', () => {
+    const state = { paneVersion: 1, paneRoot: { kind: 'leaf', id: 'panel-pane', actor: { kind: 'panel', id: 'Kitty' } }, activePaneId: 'panel-pane' }
+    expect(decodePersistedPaneLayout(state)).toEqual(state)
+  })
+})

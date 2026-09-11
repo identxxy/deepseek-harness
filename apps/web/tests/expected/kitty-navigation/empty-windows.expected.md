@@ -1,0 +1,10 @@
+- region "Kitty windows":
+  - button "Back to home":
+    - img
+  - heading "Kitty windows" [level=2]
+  - button "New window" [disabled]
+  - button "Refresh panes"
+  - button "Terminal options":
+    - img
+  - status: The selected pane or foreground process changed. Select it again.
+  - paragraph: No Kitty panes found

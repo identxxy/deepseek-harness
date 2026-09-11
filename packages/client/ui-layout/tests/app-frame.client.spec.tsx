@@ -451,7 +451,7 @@ describe('AppFrame', () => {
 
   it('sidebar slot receives live concession output as owner props', () => {
     const { slotCalls } = mountFrame()
-    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ collapsed: false, width: 280 })
+    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ collapsed: false, width: 280, sidebarPage: null })
   })
 
   it('sidebar drag widens through rAF-batched pointer moves', () => {
@@ -493,7 +493,7 @@ describe('AppFrame', () => {
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
     const lastSidebarCall = slotCalls.filter(c => c.key === 'sidebar').at(-1)!
-    expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
+    expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED, sidebarPage: null })
   })
 
   it('viewport shrink triggers the concession chain via ResizeObserver', () => {
@@ -543,7 +543,7 @@ describe('AppFrame — single-pane mobile navigation', () => {
     expect(frame.dataset.mobileView).toBe('conversation')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
     expect((frame.children[1] as HTMLElement).style.width).toBe('980px')
-    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: 0 })
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: 0, sidebarPage: null })
     expect(window.history.state).toMatchObject({ __dshMobileView: 'conversation' })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
   })
@@ -556,7 +556,7 @@ describe('AppFrame — single-pane mobile navigation', () => {
     expect(frame.dataset.mobileView).toBe('sessions')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
     expect((frame.children[1] as HTMLElement).style.width).toBe('980px')
-    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: false, width: 980 })
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: false, width: 980, sidebarPage: null })
     expect(window.history.state).toMatchObject({ __dshMobileView: 'sessions' })
   })
 
@@ -576,6 +576,24 @@ describe('AppFrame — single-pane mobile navigation', () => {
     })
     expect(tracks(frame)).toEqual([980, 0])
     expect(frame.dataset.mobileView).toBe('sessions')
+  })
+
+  it('restores a contextual browser on cold reload without adding History entries', () => {
+    frameWidth = 980
+    window.history.replaceState({ __dshMobileView: 'sessions', __dshSidebarPage: 'plugin' }, '', '/')
+    const push = vi.spyOn(window.history, 'pushState')
+    const { frame, instance, slotCalls } = mountFrame()
+    expect(frame.dataset.mobileView).toBe('sessions')
+    expect(instance.getSnapshot().sidebarPage).toBe('plugin')
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toMatchObject({ sidebarPage: 'plugin' })
+    expect(push).not.toHaveBeenCalled()
+    frameWidth = 1920
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    frameWidth = 980
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    expect(frame.dataset.mobileView).toBe('sessions')
+    expect(instance.getSnapshot().sidebarPage).toBe('plugin')
+    expect(push).not.toHaveBeenCalled()
   })
 
   it('requests browser back when an in-app action returns from conversation to the list', () => {
@@ -666,4 +684,28 @@ describe('AppFrame — unmount with an in-flight resize frame', () => {
     act(() => { fireResize?.(); fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([280, 330])
   })
+})
+
+it('opens plugin content in the native canvas without staging an Agent or mounting a Console', () => {
+  const stageSession = vi.fn(() => () => {})
+  const frame = mountFrame({ stageSession, setupLayout: (actions) => { actions.openActor({ kind: 'panel', id: 'Kitty' }, 'pane-kitty') } })
+  const panelCalls = frame.slotCalls.filter(call => call.key === 'workspace.panel')
+  expect(panelCalls.length).toBeGreaterThan(0)
+  expect(panelCalls[0]).toMatchInlineSnapshot(`
+    {
+      "key": "workspace.panel",
+      "props": {
+        "active": true,
+        "actor": {
+          "id": "Kitty",
+          "kind": "panel",
+        },
+        "mobile": false,
+        "paneId": "pane-kitty",
+      },
+    }
+  `)
+  expect(stageSession).not.toHaveBeenCalled()
+  expect(frame.queryByTestId('console-content')).toBeNull()
+  expect(frame.container.querySelector('[data-actor-kind="panel"]')).not.toBeNull()
 })

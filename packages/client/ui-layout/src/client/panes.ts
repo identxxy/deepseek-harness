@@ -2,6 +2,7 @@
 export type ActorRef =
   | { readonly kind: 'agent'; readonly id: string }
   | { readonly kind: 'console'; readonly id: string }
+  | { readonly kind: 'panel'; readonly id: string }
 
 /** Pane split direction: horizontal places children side by side. */
 export type PaneSplitDirection = 'horizontal' | 'vertical'
@@ -65,8 +66,8 @@ function decodeActor(value: unknown): ActorRef {
   const actor = record(value, 'pane actor')
   exactKeys(actor, ['id', 'kind'], 'pane actor')
   const id = nonEmptyString(actor['id'], 'pane actor id')
-  if (actor['kind'] === 'agent' || actor['kind'] === 'console') return { kind: actor['kind'], id }
-  throw new Error('pane actor kind must be agent or console')
+  if (actor['kind'] === 'agent' || actor['kind'] === 'console' || actor['kind'] === 'panel') return { kind: actor['kind'], id }
+  throw new Error('pane actor kind must be agent, console, or panel')
 }
 
 function decodePaneNode(value: unknown, depth: number, ids: Set<string>, count: { value: number }): PaneNode {

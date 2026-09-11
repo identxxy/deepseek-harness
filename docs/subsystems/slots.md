@@ -113,6 +113,7 @@ root
 │  ├─ sidebar.brand.mark
 │  ├─ sidebar.brand.name
 │  ├─ sidebar.footer.action
+│  ├─ sidebar.page
 │  ├─ sidebar.workspaces
 │  │  └─ sidebar.workspaces.directoryFlow
 │  └─ sidebar.settings
@@ -162,6 +163,10 @@ root
 │  └─ conversation.details.tool
 └─ shell.overlay
 ```
+
+Plugin session browsers contribute keyed `sidebar.page` entries. The [layout](../../packages/client/ui-layout/README.md) selects their page key and owns mobile history; the [sidebar](../../packages/client/ui-sidebar/README.md) supplies column geometry while preserving the workspace and settings declarations.
+
+Plugin panes render their body through `workspace.panel` and can register an actor-ID-keyed `workspace.panel.header` entry for the title and navigation. Layout retains split and close controls and provides the default title when a header entry is absent.
 
 The generated Client inspect catalog is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
 

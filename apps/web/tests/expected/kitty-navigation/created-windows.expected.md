@@ -1,0 +1,18 @@
+- region "Kitty windows":
+  - button "Back to home":
+    - img
+  - heading "Kitty windows" [level=2]
+  - button "New window" [disabled]
+  - button "Refresh panes"
+  - button "Terminal options":
+    - img
+  - status: "Window created. Select it from the window list; refresh if needed. #3"
+  - button "#1 · Alpha terminal":
+    - img
+    - text: "#1 · Alpha terminal zsh /workspace/alpha"
+  - button "#2 · Beta terminal":
+    - img
+    - text: "#2 · Beta terminal python /workspace/beta"
+  - button "#3 · Gamma terminal":
+    - img
+    - text: "#3 · Gamma terminal zsh /workspace/beta"

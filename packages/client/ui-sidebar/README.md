@@ -27,6 +27,8 @@ English | [中文](README.zh.md)
 
 The sidebar is the navigation shell: users see the brand, start new sessions, collapse the rail, and reach Settings. Feature plugins fill its seats — ui-workspace fills `sidebar.workspaces`, ui-settings registers the trigger row and settings panel at `sidebar.settings`.
 
+Plugins register keyed `sidebar.page` occupants and select them through `ctx.layout.openSidebarPage(key)`. The selected page replaces the browsing region and hides New Session and primary actions; brand and footer remain. The brand returns to the main list without starting a Session, and an unregistered page renders a return-home fallback. Page occupants receive the same `wide` and `expandSidebar` geometry as the Workspace browser.
+
 ### Brand and New Session
 
 The expanded brand row renders `sidebar.brand.mark` and `sidebar.brand.name` as independent single slots; the collapsed rail renders the same mark slot. Without occupants, the shell uses the fish mark and a localized local-build label. A complete build stacks a code badge below the label as `version[-commit][-dirty]`, using `DSH_CLIENT_VERSION`, the optional 7-character `DSH_CLIENT_COMMIT_HASH`, and `DSH_CLIENT_GIT_DIRTY=true`; missing version metadata omits the badge. New Session starts the runtime's page-local frontend Session Intent and asks `ctx.layout` to show the conversation destination; on a mobile-width shell this leaves the full-screen Session list. New Session targets the explicit Workspace used by a scoped action, otherwise the current Session's Workspace, otherwise the most recently active Workspace; when none exists it clears into the blank New Session page.
@@ -47,7 +49,7 @@ Scrollbars in the column are a pointer affordance: the shell rebinds the scrollb
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The shell is pure composition: `SidebarRootComponentProps` composes the layout owner share, the global `useSessions` and `useWorkspaces` hooks, the declared brand, the `sidebar.workspaces` and `sidebar.settings` child slots, and injected `startSession` plus sidebar-toggle callbacks. There is no plugin store.
+The shell is pure composition: `SidebarRootComponentProps` composes the layout owner share, the global `useSessions` and `useWorkspaces` hooks, the declared brand, the `sidebar.workspaces` and `sidebar.settings` child slots, and injected Session-start, return-home, and sidebar-toggle callbacks. There is no plugin store.
 
 ### Slot discipline
 

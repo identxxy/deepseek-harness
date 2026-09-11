@@ -1,0 +1,14 @@
+- region "Kitty windows":
+  - button "Back to home":
+    - img
+  - heading "Kitty windows" [level=2]
+  - button "New window"
+  - button "Refresh panes"
+  - button "Terminal options":
+    - img
+  - button "#1 · Alpha terminal" [pressed]:
+    - img
+    - text: "#1 · Alpha terminal zsh /workspace/alpha"
+  - button "#2 · Beta terminal":
+    - img
+    - text: "#2 · Beta terminal python /workspace/beta"

@@ -16,7 +16,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { computeColumns, MOBILE_NAV_BREAKPOINT } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
-import { readMobileHistoryView, useMobileHistory } from './mobile-history.ts'
+import { readMobileHistoryNavigation, useMobileHistory } from './mobile-history.ts'
 import type { createLayoutStore } from './stores.ts'
 import { findPane, firstPaneId } from './panes.ts'
 import type { ActorRef, PaneNode, PaneSplitDirection } from './panes.ts'
@@ -34,7 +34,9 @@ export interface AppFrameInjected {
 export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsLocale<'layout'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay' | 'workspace.console'>
+  & PropsRenderSlots<
+    'sidebar' | 'conversation' | 'details' | 'shell.overlay' | 'workspace.console' | 'workspace.panel' | 'workspace.panel.header'
+  >
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & InjectFace<AppFrameInjected>
 
@@ -140,7 +142,9 @@ function ActorPane(props: PaneCanvasProps & { node: Extract<PaneNode, { kind: 'l
         {renderSlot('conversation', {})}
       </SessionProvider>
     )
-    : renderSlot('workspace.console', { actor: node.actor, paneId: node.id, active, mobile })
+    : node.actor.kind === 'console'
+      ? renderSlot('workspace.console', { actor: node.actor, paneId: node.id, active, mobile })
+      : renderSlot('workspace.panel', { actor: node.actor, paneId: node.id, active, mobile })
   return (
     <div
       className={css.actorPane}
@@ -150,8 +154,20 @@ function ActorPane(props: PaneCanvasProps & { node: Extract<PaneNode, { kind: 'l
       onPointerDown={focus}
     >
       <div className={css.paneHeader}>
-        <span className={css.paneKind}>{node.actor.kind === 'agent' ? t('agent') : t('terminal')}</span>
-        <span className={css.paneTitle}>{titleOf(node.actor)}</span>
+        {node.actor.kind === 'panel'
+          ? <div className={css.panePanelHeader}>
+            {renderSlot('workspace.panel.header', { actor: node.actor, paneId: node.id, active, mobile }, {
+              entryKey: node.actor.id,
+              fallback: <>
+                <span className={css.paneKind}>{t('panel')}</span>
+                <span className={css.paneTitle}>{titleOf(node.actor)}</span>
+              </>,
+            })}
+          </div>
+          : <>
+            <span className={css.paneKind}>{node.actor.kind === 'agent' ? t('agent') : t('terminal')}</span>
+            <span className={css.paneTitle}>{titleOf(node.actor)}</span>
+          </>}
         {!mobile && (
           <span className={css.paneActions}>
             <button type="button" title={t('splitRight')} aria-label={t('splitRight')} onClick={() => { split('horizontal') }}>⇥</button>
@@ -341,15 +357,19 @@ export function AppFrame({
     }
   }, [])
 
-  // Below the mobile breakpoint the shell becomes a two-level, single-pane
+  // Below the mobile breakpoint the shell becomes single-pane
   // navigation. Both subtrees stay mounted; zero-width tracks preserve their
   // local state while clipping the inactive destination.
   const singlePane = viewport < MOBILE_NAV_BREAKPOINT
   useEffect(() => { actions.setSinglePane(singlePane) }, [actions, singlePane])
+  const historyNavigation = panels.mobileView === 'auto' && singlePane
+    ? readMobileHistoryNavigation(window.history.state)
+    : undefined
   const mobileView = panels.mobileView === 'auto'
-    ? readMobileHistoryView(window.history.state) ?? (currentSession === undefined ? 'sessions' : 'conversation')
+    ? historyNavigation?.view ?? (currentSession === undefined ? 'sessions' : 'conversation')
     : panels.mobileView
-  useMobileHistory(singlePane, mobileView, actions)
+  const sidebarPage = historyNavigation?.sidebarPage ?? panels.sidebarPage
+  useMobileHistory(singlePane, mobileView, sidebarPage, actions)
 
   const desktopCols = computeColumns(
     viewport,
@@ -412,6 +432,7 @@ export function AppFrame({
         {renderSlot('sidebar', {
           collapsed: sidebarCollapsed,
           width: cols.sidebar,
+          sidebarPage,
         })}
       </div>
       <>

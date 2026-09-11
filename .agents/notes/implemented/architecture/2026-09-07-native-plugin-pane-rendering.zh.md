@@ -1,0 +1,31 @@
+# Agent Note: 原生插件窗格渲染
+
+Status: implemented
+
+[English](2026-09-07-native-plugin-pane-rendering.md) | 中文
+
+## 问题
+
+外部终端控制需要与 DSH 对话一致的导航、输入展示和响应式布局。将已有 Kitty pane 表示为 DSH Agent 或 Console，会赋予插件实际并不持有的 Session 或进程所有权。
+
+## 决策
+
+布局接受 `panel` actor，通过 root 作用域的 `workspace.panel` 槽位渲染内容。其标识选择插件视图，不是 Session 标识。窗格布局保存在设备本地，插件持有所选外部目标和草稿。
+
+Keyed `workspace.panel.header` 槽位按 actor ID 选择条目，将插件标题和返回操作放入原生窗格顶栏。布局保留分屏及关闭控件，未注册对应顶栏时提供通用标题。Kitty 窗口选择页持有新建窗口和显示选项，通过共享视图 store 将设置提供给终端内容。
+
+Kitty 占据此槽位，复用对话样式、UI primitives 和附件展示。附件组件接收 owner props 与翻译器，不需要 Session hooks；Kitty 在自身窗格内处理拖放，并禁用组件的 document 监听器。关闭窗格卸载内容，但不关闭外部终端。
+
+Kitty 共用侧栏顶部操作槽位及 Console 新建按钮样式。窗口创建是针对明确选中的 Kitty 实例执行的已认证排队操作，在所选目录启动默认 shell，且不抢占焦点。返回的窗口 ID 只在该实例内解析，因为不同 Kitty 实例可能复用 ID。创建失败不会自动重试。
+
+外部会话浏览器占据 keyed `sidebar.page` 条目。布局统一持有暂存的页面 key 和移动端目标，使浏览器历史表达主列表、插件窗口列表和所选终端。Kitty 持有窗口目录和选择状态；返回列表保留所选窗口和草稿。选择另一个窗口会重新挂载终端内容，丢弃上一窗口的草稿、图片和屏幕请求。
+
+## 考虑过的替代方案
+
+独立覆盖层重复原生导航和输入样式。复用 Agent 或 Console actor 会错误声明所有权。基于 [Host-owned Console Sessions](../../rejected/feature/2026-08-25-host-owned-console-sessions.zh.md) 中的原因，终端屏幕不解析为模型消息记录，而以快照展示。
+
+**终端顶部下拉框**使手机端切换窗口依赖紧凑的表单控件，父列表也不进入浏览器历史。**替换工作区槽位注册**会移除它声明的子槽位。独立的 keyed 页面保留这些声明，由 shell 选择浏览内容。
+
+## 影响
+
+插件视图共用原生窗格导航，不产生模型可见事件。此 profile 的单一渲染槽位只有一个占据者；增加视图提供方需要显式组合。布局恢复与挂载渲染检查覆盖 panel 标识，且不暂存 Session；附件检查覆盖禁用 document 拖放接收。

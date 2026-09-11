@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package provides the shell layout of the Web GUI: a three-column AppFrame with resizable sidebar and details panels, a concession chain that shrinks the details column and then auto-closes it when space runs out, and the `ctx.layout` panel-geometry service other plugins call to open or close the details column. Below 1024px the frame becomes two-level single-pane navigation: one full-width destination renders at a time (Session list or conversation), entering a conversation pushes a same-URL browser History entry so browser back and the platform edge-swipe return to the Session list before leaving DSH, and the inactive destination stays mounted at zero width. It also seats the theme presenter, which projects the resolved color scheme, alias tokens, content font size, and `theme-color` metadata onto the document. Choose it for the standard window chrome; panel geometry is transient and resets on reload.
+This package provides the shell layout of the Web GUI: a three-column AppFrame with resizable sidebar and details panels, a concession chain that shrinks the details column and then auto-closes it when space runs out, and the `ctx.layout` panel-geometry service other plugins call to open or close the details column. Below 1024px the frame becomes single-pane navigation: one full-width destination renders at a time (Session list or conversation), entering a conversation pushes a same-URL browser History entry so browser back and the platform edge-swipe return to the Session list before leaving DSH, and the inactive destination stays mounted at zero width. It also seats the theme presenter, which projects the resolved color scheme, alias tokens, content font size, and `theme-color` metadata onto the document. Choose it for the standard window chrome; panel geometry is transient and resets on reload.
 
 ## Table of Contents
 
@@ -27,6 +27,10 @@ This package provides the shell layout of the Web GUI: a three-column AppFrame w
 
 Mount this plugin at the root slot; it then renders the app frame around whatever occupies the sidebar, conversation, and details columns. Users resize the sidebar by dragging its invisible hit strip and the details panel by dragging its floating pill; when the window narrows, only details shrinks, then auto-closes. A closed sidebar retains a 56px control rail; details closes to zero width.
 
+Plugins open native panes with `ctx.layout.openActor({ kind: 'panel', id })`; the root-scoped `workspace.panel` renders their content. They share pane splitting, closing and mobile navigation without creating a Session or acquiring Console ownership. The pane tree persists on the device; sidebar and details widths remain transient. A keyed `workspace.panel.header` occupant supplies the plugin title and navigation inside native pane chrome, selected by actor id and receiving the same owner props as the body; the layout retains split and close controls. Without an occupant, the header shows the generic Panel label and actor id.
+
+Plugins register a contextual browser in `sidebar.page` and open it with `ctx.layout.openSidebarPage(key)`, which expands the sidebar and shows its list on mobile. `showConversation()` and `showSessionList()` retain that page; `closeSidebarPage()` returns to the main list. Mobile History follows main list → contextual list → conversation, including browser back/forward and reload; returning through a UI control traverses the same entries. The page is transient viewing state and never enters the pane persistence record.
+
 ### Theme presentation
 
 The presenter consumes resolved theme snapshots and projects them onto the document: `html { color-scheme }` for native UA chrome, `body[data-ds-dark-theme]` from the active color scheme, the theme's alias tokens and `--dsh-content-font-size` as inline variables on body, and one owned `<meta name="theme-color">` whose content follows the computed body background. Disposing the presenter removes its metadata node with its other global writes.
@@ -39,7 +43,7 @@ The presenter consumes resolved theme snapshots and projects them onto the docum
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-One `register()` call contributes `AppFrame` into the runtime's built-in `'root'` slot and, in the same breath, declares the four child slots (`sidebar`, `conversation`, `details`, `shell.overlay`), seats the layout store (panel geometry), and wires the `ctx.layout` panel-action service. The transient layout store starts the sidebar at its default width and details closed, and never reads or writes `localStorage`. AppFrame always mounts the conversation and details columns; a connected Session renders through `SessionProvider`. It projects the selected Session title over the build-configured product title or the localized `common.brand.localBuild` fallback, so locale revisions update document metadata with the root entry. The theme presenter is a second effect: pure DOM writes from resolved snapshots — initial state through the getter once, then event-driven only, with no React path. It applies palette, font-size, and token variables before measuring the rendered background as the single color authority.
+One `register()` call contributes `AppFrame` into the runtime's built-in `'root'` slot and, in the same breath, declares the child slots (`sidebar`, `conversation`, `details`, `shell.overlay`, `workspace.console`, `workspace.panel`, `workspace.panel.header`), seats the layout store (panel geometry), and wires the `ctx.layout` panel-action service. The transient layout store starts the sidebar at its default width and details closed, and persists only the pane tree and active pane. AppFrame always mounts the conversation and details columns; a connected Session renders through `SessionProvider`. It projects the selected Session title over the build-configured product title or the localized `common.brand.localBuild` fallback, so locale revisions update document metadata with the root entry. The theme presenter is a second effect: pure DOM writes from resolved snapshots — initial state through the getter once, then event-driven only, with no React path. It applies palette, font-size, and token variables before measuring the rendered background as the single color authority.
 
 </details>
 
@@ -77,7 +81,7 @@ These limits define the current layout behavior. They are current package constr
 - **Concession-chain auto-close derives a zero width without touching the preferred width** — the panel restores itself when the window widens; consumers must not read the stored details width as the rendered truth.
 - **No scroll anchoring during squeeze reflow** — layout changes may move the reader's viewport.
 
-- **Mobile History does not encode a Session id in the URL** — reloading restores the runtime's selected Session and uses History only for list/conversation navigation.
+- **Mobile History does not encode a Session id in the URL** — reloading restores the runtime's selected Session and uses History for the active sidebar page and list/conversation navigation.
 
 <a id="dev-note"></a>
 ### Dev Note

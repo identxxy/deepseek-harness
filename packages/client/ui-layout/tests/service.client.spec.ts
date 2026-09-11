@@ -16,6 +16,9 @@ function fakeActions(): LayoutActions {
     setSinglePane: vi.fn(),
     showSessionList: vi.fn(),
     showConversation: vi.fn(),
+    openSidebarPage: vi.fn(),
+    closeSidebarPage: vi.fn(),
+    restoreMobileNavigation: vi.fn(),
     openDetails: vi.fn(),
     closeDetails: vi.fn(),
     openActor: vi.fn(),
@@ -36,6 +39,8 @@ describe('LayoutController', () => {
     service.toggleSidebar()
     service.showSessionList()
     service.showConversation()
+    service.openSidebarPage('plugin')
+    service.closeSidebarPage()
     service.openDetails()
     service.closeDetails()
     service.openActor({ kind: 'agent', id: 's1' })
@@ -45,6 +50,8 @@ describe('LayoutController', () => {
     expect(actions.toggleSidebar).toHaveBeenCalledTimes(1)
     expect(actions.showSessionList).toHaveBeenCalledTimes(1)
     expect(actions.showConversation).toHaveBeenCalledTimes(1)
+    expect(actions.openSidebarPage).toHaveBeenCalledWith('plugin')
+    expect(actions.closeSidebarPage).toHaveBeenCalledOnce()
     expect(actions.openDetails).toHaveBeenCalledTimes(1)
     expect(actions.closeDetails).toHaveBeenCalledTimes(1)
     expect(actions.openActor).toHaveBeenCalledWith({ kind: 'agent', id: 's1' }, expect.stringMatching(/^pane-/))

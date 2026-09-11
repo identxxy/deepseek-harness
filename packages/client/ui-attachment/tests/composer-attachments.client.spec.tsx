@@ -88,6 +88,16 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Composer
 }
 
 describe('ComposerAttachments', () => {
+  it('leaves document drops to the pane owner when disabled', () => {
+    const onAddFiles = vi.fn()
+    const view = render(<ComposerAttachments {...props({ onAddFiles })} documentDrop={false} />)
+    const dataTransfer = { types: ['Files'], files: [attachment('drop').file] }
+    expect(fireEvent.dragEnter(document.body, { dataTransfer })).toBe(true)
+    expect(fireEvent.drop(document.body, { dataTransfer })).toBe(true)
+    expect(onAddFiles).not.toHaveBeenCalled()
+    expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
+  })
+
   it('accepts file drops anywhere on the document and keeps non-file drags native', () => {
     const onAddFiles = vi.fn()
     const view = render(<ComposerAttachments {...props({

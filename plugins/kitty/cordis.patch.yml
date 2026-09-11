@@ -1,0 +1,3 @@
+- insert:
+    - id: kitty-host
+      name: '@deepseek-ai/dsh-kitty'

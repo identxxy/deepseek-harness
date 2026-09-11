@@ -113,6 +113,7 @@ root
 │  ├─ sidebar.brand.mark
 │  ├─ sidebar.brand.name
 │  ├─ sidebar.footer.action
+│  ├─ sidebar.page
 │  ├─ sidebar.workspaces
 │  │  └─ sidebar.workspaces.directoryFlow
 │  └─ sidebar.settings
@@ -163,7 +164,11 @@ root
 └─ shell.overlay
 ```
 
-生成的 Client inspect catalog 是每个 key 的完整参考，包含 cardinality、scope、owner props、标准 props、当前 occupant、声明 owner 与替换风险。运行中的动态包可以用 `cordis_inspect what:"client"` 查询实时树与某个精确 key；源码 catalog 由 `pnpm run gen-client-catalog` 根据 `SlotMap` 声明和 `slots.register()` 调用点生成。
+插件会话浏览器通过 keyed `sidebar.page` 条目贡献内容。[布局](../../packages/client/ui-layout/README.zh.md)选择页面 key 并管理移动端历史；[侧栏](../../packages/client/ui-sidebar/README.zh.md)提供列布局，同时保留工作区和设置的声明。
+
+插件窗格通过 `workspace.panel` 渲染内容，也可注册以 actor ID 为 key 的 `workspace.panel.header` 条目来提供标题和导航。布局保留分屏及关闭控件，在缺少对应顶栏条目时提供默认标题。
+
+生成的 Client inspect catalog 是每个 key 的完整参考，包含 cardinality、scope、owner props、标准 props、当前 occupant、声明 owner 与替换风险。运行中的动态包可以用 `cordis_inspect what:"client"` 查询实时树与某个精确 key；源码 catalog 由 `SlotMap` 声明和 `slots.register()` 调用点通过 `pnpm run gen-client-catalog` 生成。
 
 ## 扩展规则
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
-  ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
+  ComposerAttachment, ComposerAttachmentsProps, ComposerAttachmentsOwnerProps, ComposerImageAttachment,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { IconCloseFill14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AttachmentRail } from '../AttachmentRail.tsx'
@@ -18,8 +18,11 @@ interface ComposerRailItem extends AttachmentRailItem {
 
 /** Draft image previews, pending-file cards, drop target, and original-image preview. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, dropLimits, t,
-}: ComposerAttachmentsProps) {
+  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, dropLimits, t, documentDrop = true,
+}: ComposerAttachmentsOwnerProps & Pick<ComposerAttachmentsProps, 't'> & {
+  /** Disable when the embedding pane owns file drop events. */
+  documentDrop?: boolean
+}) {
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const dragDepth = useRef(0)
@@ -29,6 +32,7 @@ export function ComposerAttachments({
   }, [attachments, preview])
 
   useEffect(() => {
+    if (!documentDrop) return
     const fileTransfer = (event: globalThis.DragEvent): DataTransfer | null => {
       const dataTransfer = event.dataTransfer
       if (dataTransfer === null || !dataTransfer.types.includes('Files')) return null
@@ -77,7 +81,7 @@ export function ComposerAttachments({
       document.removeEventListener('drop', onDrop)
       window.removeEventListener('dragend', reset)
     }
-  }, [canAcceptDrop, onAddFiles])
+  }, [canAcceptDrop, onAddFiles, documentDrop])
 
   const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({
     id: attachment.id,

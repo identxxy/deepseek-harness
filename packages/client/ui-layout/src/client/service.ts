@@ -23,9 +23,16 @@ export type LayoutActions = BoundActions<ReturnType<typeof createLayoutStore>>
 export interface ILayout {
   /** Toggle the sidebar panel (closed ⟷ contract default width). */
   toggleSidebar(): void
-  /** Show the Session list in single-pane navigation. */
+  /**
+   * Show a plugin's keyed sidebar page and expand the sidebar.
+   * @param page - key registered in sidebar.page.
+   */
+  openSidebarPage(page: string): void
+  /** Return to the main Session list and clear the contextual sidebar page. */
+  closeSidebarPage(): void
+  /** Show the Session list in single-pane navigation, retaining its sidebar page. */
   showSessionList(): void
-  /** Show the conversation in single-pane navigation. */
+  /** Show the conversation in single-pane navigation, retaining its sidebar page. */
   showConversation(): void
   /** Open the details panel (no-op when already open). */
   openDetails(): void
@@ -75,12 +82,25 @@ export class LayoutController implements ILayout {
     this.#require().toggleSidebar()
   }
 
-  /** Show the Session list in single-pane navigation. */
+  /**
+   * Show a plugin's keyed sidebar page and expand the sidebar.
+   * @param page - key registered in sidebar.page.
+   */
+  openSidebarPage(page: string): void {
+    this.#require().openSidebarPage(page)
+  }
+
+  /** Return to the main Session list and clear the contextual sidebar page. */
+  closeSidebarPage(): void {
+    this.#require().closeSidebarPage()
+  }
+
+  /** Show the Session list in single-pane navigation, retaining its sidebar page. */
   showSessionList(): void {
     this.#require().showSessionList()
   }
 
-  /** Show the conversation in single-pane navigation. */
+  /** Show the conversation in single-pane navigation, retaining its sidebar page. */
   showConversation(): void {
     this.#require().showConversation()
   }

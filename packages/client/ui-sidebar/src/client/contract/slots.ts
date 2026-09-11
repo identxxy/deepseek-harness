@@ -28,6 +28,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'sidebar.brand.name': { kind: 'single'; scope: 'root'; owner: SidebarBrandNameOwnerProps }
     /** Optional primary actions rendered directly below New Session. */
     'sidebar.primary.action': { kind: 'list'; scope: 'root'; owner: SidebarPrimaryActionOwnerProps }
+    /** Plugin-owned contextual browser, selected by ctx.layout.openSidebarPage(). */
+    'sidebar.page': { kind: 'keyed'; scope: 'root'; owner: SidebarSectionOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
@@ -105,6 +107,8 @@ export type SidebarRootInjected = {
    * recent Workspace, or clear into the New Session pure view when none exist.
    */
   startSession: (workspaceId?: WorkspaceId) => void
+  /** Return to the main Session list without changing the selected Session. */
+  closeSidebarPage: () => void
   /** Toggle the sidebar column through the layout service. */
   toggleSidebar: () => void
 }
@@ -121,6 +125,7 @@ export type SidebarRootComponentProps =
     | 'sidebar.brand.name'
     | 'sidebar.primary.action'
     | 'sidebar.workspaces'
+    | 'sidebar.page'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
   >

@@ -29,6 +29,7 @@ type LayoutState = {
   details: number
   singlePane: boolean
   mobileView: 'auto' | 'sessions' | 'conversation'
+  sidebarPage: string | null
   paneVersion: 1
   paneRoot: PaneNode | null
   activePaneId: string | null
@@ -43,6 +44,9 @@ type LayoutActions = {
   setDetails: (draft: LayoutState, px: number) => void
   toggleSidebar: (draft: LayoutState) => void
   setSinglePane: (draft: LayoutState, singlePane: boolean) => void
+  openSidebarPage: (draft: LayoutState, page: string) => void
+  closeSidebarPage: (draft: LayoutState) => void
+  restoreMobileNavigation: (draft: LayoutState, view: 'sessions' | 'conversation', sidebarPage: string | null) => void
   showSessionList: (draft: LayoutState) => void
   showConversation: (draft: LayoutState) => void
   openDetails: (draft: LayoutState) => void
@@ -74,6 +78,7 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       details: 0,
       singlePane: false,
       mobileView: 'auto',
+      sidebarPage: null,
       paneVersion: 1,
       paneRoot: null,
       activePaneId: null,
@@ -100,7 +105,16 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       setSinglePane: (d, singlePane: boolean) => {
         if (d.singlePane === singlePane) return
         d.singlePane = singlePane
-        d.mobileView = 'auto'
+      },
+      openSidebarPage: (d, page: string) => {
+        d.sidebarPage = page
+        d.mobileView = 'sessions'
+        if (d.sidebar === 0) d.sidebar = SIDEBAR_DEFAULT
+      },
+      closeSidebarPage: (d) => { d.sidebarPage = null; d.mobileView = 'sessions' },
+      restoreMobileNavigation: (d, view: 'sessions' | 'conversation', sidebarPage: string | null) => {
+        d.mobileView = view
+        d.sidebarPage = sidebarPage
       },
       showSessionList: (d) => { d.mobileView = 'sessions' },
       showConversation: (d) => { d.mobileView = 'conversation' },

@@ -1,0 +1,18 @@
+- region "Kitty windows":
+  - button "Back to home":
+    - img
+  - heading "Kitty windows" [level=2]
+  - button "New window" [disabled]
+  - button "Refresh panes"
+  - button "Terminal options" [expanded]:
+    - img
+  - button "Follow output"
+  - button "Include scrollback" [pressed]
+  - button "Original line width" [pressed]
+  - paragraph: Controls the existing terminal. The model and approvals are managed by its CLI.
+  - button "#1 · Alpha terminal":
+    - img
+    - text: "#1 · Alpha terminal zsh /workspace/alpha"
+  - button "#2 · Beta terminal":
+    - img
+    - text: "#2 · Beta terminal python /workspace/beta"

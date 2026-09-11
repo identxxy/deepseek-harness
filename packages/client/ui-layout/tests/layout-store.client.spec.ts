@@ -24,6 +24,7 @@ describe('createLayoutStore', () => {
       details: 0,
       singlePane: false,
       mobileView: 'auto',
+      sidebarPage: null,
       paneVersion: 1,
       paneRoot: null,
       activePaneId: null,
@@ -68,6 +69,7 @@ describe('createLayoutStore', () => {
       details: 0,
       singlePane: true,
       mobileView: 'conversation',
+      sidebarPage: null,
       paneVersion: 1,
       paneRoot: null,
       activePaneId: null,
@@ -81,16 +83,30 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().sidebar).toBe(400)
   })
 
-  it('crossing the breakpoint resets the destination while a same-value write keeps it', () => {
+  it('crossing the breakpoint retains the explicit destination', () => {
     const { store, actions } = createLayoutStore().create()
     actions.setSinglePane(true)
     actions.showConversation()
     actions.setSinglePane(true)
     expect(store.getSnapshot().mobileView).toBe('conversation')
     actions.setSinglePane(false)
-    expect(store.getSnapshot()).toMatchObject({ singlePane: false, mobileView: 'auto' })
+    expect(store.getSnapshot()).toMatchObject({ singlePane: false, mobileView: 'conversation' })
     actions.setSinglePane(true)
-    expect(store.getSnapshot().mobileView).toBe('auto')
+    expect(store.getSnapshot().mobileView).toBe('conversation')
+  })
+
+  it('retains the contextual browser while opening conversations and clears it on return home', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.toggleSidebar()
+    actions.openSidebarPage('plugin')
+    expect(store.getSnapshot()).toMatchObject({ sidebar: SIDEBAR_DEFAULT, sidebarPage: 'plugin', mobileView: 'sessions' })
+    actions.showConversation()
+    actions.showSessionList()
+    expect(store.getSnapshot().sidebarPage).toBe('plugin')
+    actions.restoreMobileNavigation('conversation', 'other')
+    expect(store.getSnapshot()).toMatchObject({ sidebarPage: 'other', mobileView: 'conversation' })
+    actions.closeSidebarPage()
+    expect(store.getSnapshot()).toMatchObject({ sidebarPage: null, mobileView: 'sessions' })
   })
 
   it('openDetails uses the contract default, preserves an open width, and closeDetails zeroes', () => {
@@ -162,6 +178,7 @@ describe('createLayoutStore', () => {
     first.actions.openDetails()
     first.actions.setDetails(500)
     first.actions.setSinglePane(true)
+    first.actions.openSidebarPage('plugin')
     first.actions.showConversation()
     first.actions.openActor({ kind: 'agent', id: 's1' }, 'pane-a')
     first.actions.splitActor({ kind: 'console', id: 'c1' }, 'horizontal', 'split-1', 'pane-b')
@@ -181,6 +198,7 @@ describe('createLayoutStore', () => {
       details: 0,
       singlePane: false,
       mobileView: 'auto',
+      sidebarPage: null,
       paneVersion: 1,
       paneRoot: {
         kind: 'split', id: 'split-1', direction: 'horizontal', ratio: 0.5,
@@ -216,6 +234,7 @@ describe('createLayoutStore', () => {
 
   it('rejects an invalid durable pane tree and starts from the safe initial layout', () => {
     localStorage.setItem(PERSIST_KEY, JSON.stringify({
+      sidebarPage: null,
       paneVersion: 1,
       paneRoot: { kind: 'leaf', id: 'pane-a', actor: { kind: 'shell', id: 'x' } },
       activePaneId: 'pane-a',

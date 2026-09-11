@@ -45,6 +45,7 @@ export function apply(ctx: ClientContext): void {
     // The shell's New Session button rides the Workspace UI's shared action
     // (current Session Workspace, then recent Workspace).
     startSession: (workspaceId) => { workspaceNavigation.startSession(workspaceId) },
+    closeSidebarPage: () => { ctx.layout.closeSidebarPage() },
     toggleSidebar: () => { ctx.layout.toggleSidebar() },
   })
   ctx.effect(
@@ -58,6 +59,7 @@ export function apply(ctx: ClientContext): void {
         'sidebar.brand.mark': { kind: 'single', scope: 'root' },
         'sidebar.brand.name': { kind: 'single', scope: 'root' },
         'sidebar.primary.action': { kind: 'list', scope: 'root' },
+        'sidebar.page': { kind: 'keyed', scope: 'root' },
         'sidebar.workspaces': { kind: 'single', scope: 'root' },
         'sidebar.settings': { kind: 'single', scope: 'root' },
         'sidebar.footer.action': { kind: 'list', scope: 'root' },

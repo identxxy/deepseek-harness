@@ -1,0 +1,3 @@
+- button "Back to Kitty windows":
+  - img
+- text: "#2 · Beta terminal"

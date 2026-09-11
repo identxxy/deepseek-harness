@@ -52,6 +52,8 @@ function localBuildVersion(): string | undefined {
 export function SidebarRoot({
   collapsed,
   width,
+  sidebarPage,
+  closeSidebarPage,
   startSession,
   toggleSidebar,
   t,
@@ -138,14 +140,14 @@ export function SidebarRoot({
       onPointerLeave={() => { armLinger() }}
     >
       <div className={css.logoRow}>
-        {/* Expanded, the brand doubles as a New Session shortcut; the
-            collapsed rail's logo is the expand toggle below instead. */}
+        {/* The brand starts a Session from the main list and returns home
+            from a contextual page. The collapsed logo expands the rail. */}
         {wide && (
           <button
             type="button"
             className={clsx(css.brand, css.wide)}
-            aria-label={t('session.new.label')}
-            onClick={() => { startSession() }}
+            aria-label={sidebarPage === null ? t('session.new.label') : t('page.back')}
+            onClick={() => { if (sidebarPage === null) startSession(); else closeSidebarPage() }}
           >
             <span className={css.brandIdentity} aria-hidden="true">
               <span className={css.brandMark}>
@@ -187,7 +189,7 @@ export function SidebarRoot({
       </div>
 
       {/* Expanded, the button carries its own label — tooltip only on the rail. */}
-      <Tooltip label={t('session.new.label')} delayMs={500} disabled={wide}>
+      {sidebarPage === null && <Tooltip label={t('session.new.label')} delayMs={500} disabled={wide}>
         <button
           type="button"
           className={css.newSession}
@@ -197,17 +199,25 @@ export function SidebarRoot({
           <IconNewChatOutline16 size={wide ? 14 : 18} />
           {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
         </button>
-      </Tooltip>
+      </Tooltip>}
 
-      {renderSlot('sidebar.primary.action', { wide })}
+      {sidebarPage === null && renderSlot('sidebar.primary.action', { wide })}
 
       {/* The browsing region fills the column between the controls and the
           foot in both states; its rail icon column rides the same slot. */}
       <div className={css.regionArea}>
-        {renderSlot('sidebar.workspaces', {
-          wide,
-          expandSidebar: () => { if (collapsed) toggleSidebar() },
-        })}
+        {sidebarPage === null
+          ? renderSlot('sidebar.workspaces', {
+            wide,
+            expandSidebar: () => { if (collapsed) toggleSidebar() },
+          })
+          : renderSlot('sidebar.page', {
+            wide,
+            expandSidebar: () => { if (collapsed) toggleSidebar() },
+          }, {
+            entryKey: sidebarPage,
+            fallback: <button type="button" onClick={closeSidebarPage}>{t('page.back')}</button>,
+          })}
       </div>
 
       {/* Footer actions stack above Settings in both sidebar widths. */}

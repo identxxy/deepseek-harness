@@ -28,8 +28,13 @@ type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSes
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
 
-function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
+function mountShell({ collapsed = false, width = 300, sidebarPage = null }: {
+  collapsed?: boolean
+  width?: number
+  sidebarPage?: string | null
+} = {}) {
   const startSession = vi.fn()
+  const closeSidebarPage = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
   let primaryActionOwner: SidebarPrimaryActionOwnerProps | undefined
@@ -37,16 +42,22 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
   const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
-  let current = { collapsed, width }
+  let current = { collapsed, width, sidebarPage }
   const root = () => (
     <SidebarRoot
+      sidebarPage={current.sidebarPage} closeSidebarPage={closeSidebarPage}
       collapsed={current.collapsed} width={current.width}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
         owner: SidebarFooterActionOwnerProps | SidebarPrimaryActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        options?: { entryKey?: string },
       ) => {
+        if (key === 'sidebar.page') {
+          regionOwner = owner as SidebarSectionOwnerProps
+          return <div data-testid="page" data-page={options?.entryKey} data-wide={owner.wide} />
+        }
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.settings') {
@@ -69,6 +80,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   const view = render(root())
   return {
     startSession,
+    closeSidebarPage,
     toggleSidebar,
     regionOwner: () => {
       if (regionOwner === undefined) throw new Error('region owner not rendered')
@@ -107,11 +119,46 @@ describe('SidebarRoot shell', () => {
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
+  it('shows the selected contextual page instead of native browsing and returns home through the brand', () => {
+    const b = mountShell({ sidebarPage: 'plugin' })
+    expect(screen.getByTestId('page').dataset.page).toBe('plugin')
+    expect(screen.queryByTestId('region')).toBeNull()
+    expect(screen.queryByTestId('primary-action-seat')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+    expect(screen.getByTestId('settings-seat')).toBeTruthy()
+    expect(screen.getByTestId('footer-action-seat')).toBeTruthy()
+    b.regionOwner().expandSidebar()
+    expect(b.toggleSidebar).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to sessions' }))
+    expect(b.closeSidebarPage).toHaveBeenCalledOnce()
+    expect(b.startSession).not.toHaveBeenCalled()
+    b.rerender({ sidebarPage: null })
+    expect(screen.getByTestId('region')).toBeTruthy()
+    expect(screen.getByTestId('primary-action-seat')).toBeTruthy()
+  })
+
+  it('keeps a return-home fallback when the selected page has no occupant', () => {
+    const closeSidebarPage = vi.fn()
+    render(<SidebarRoot
+      sidebarPage="missing" closeSidebarPage={closeSidebarPage}
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+    const returns = screen.getAllByRole('button', { name: 'Back to sessions' })
+    expect(returns).toHaveLength(2)
+    fireEvent.click(returns[1]!)
+    expect(closeSidebarPage).toHaveBeenCalledOnce()
+  })
+
   it('renders generic brand fallbacks when no package fills the slots', () => {
     vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
     vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const { container } = render(<SidebarRoot
+      sidebarPage={null} closeSidebarPage={vi.fn()}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
@@ -130,6 +177,7 @@ describe('SidebarRoot shell', () => {
   ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
     for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
     render(<SidebarRoot
+      sidebarPage={null} closeSidebarPage={vi.fn()}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
@@ -143,6 +191,7 @@ describe('SidebarRoot shell', () => {
 
   it('retains the local-build fallback without complete build metadata', () => {
     render(<SidebarRoot
+      sidebarPage={null} closeSidebarPage={vi.fn()}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}

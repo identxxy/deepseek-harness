@@ -14,6 +14,7 @@ import { SlotTestRuntime, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-cli
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import type { SidebarSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 
 // The service reads its initial locale from the browser; these specs assert
@@ -39,7 +40,7 @@ afterEach(() => {
  */
 async function bench(options: { locale?: 'en' } = {}) {
   const runtime = await SlotTestRuntime.create()
-  runtime.ctx.provide('layout', { toggleSidebar: vi.fn() })
+  runtime.ctx.provide('layout', { toggleSidebar: vi.fn(), closeSidebarPage: vi.fn() })
   runtime.ctx.provide('uiWorkspace', { startSession: vi.fn() } as never)
   const locale = new LocaleRuntime(runtime.ctx)
   locale.register('common', { zh: commonZh, en: commonEn })
@@ -52,9 +53,41 @@ async function bench(options: { locale?: 'en' } = {}) {
 }
 
 describe('sidebar shell snapshots', () => {
+  it('dispatches the selected contextual page through the live keyed registry and falls back after its disposal', async () => {
+    const { runtime } = await bench({ locale: 'en' })
+    try {
+      await runtime.mount({
+        inject: ['slots'],
+        apply(ctx) {
+          ctx.effect(() => ctx.slots.register({ name: 'sidebar.page', key: 'first' },
+            ({ wide }: SidebarSectionOwnerProps) => <div data-wide={wide}>First browser</div>))
+        },
+      })
+      const second = await runtime.mount({
+        inject: ['slots'],
+        apply(ctx) {
+          ctx.effect(() => ctx.slots.register({ name: 'sidebar.page', key: 'second' },
+            ({ wide }: SidebarSectionOwnerProps) => <div data-wide={wide}>Second browser</div>))
+        },
+      })
+      const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: 'first' })
+      expect(slot.view.getByText('First browser').dataset.wide).toBe('true')
+      expect(slot.view.queryByText('Second browser')).toBeNull()
+      expect(slot.view.queryByRole('button', { name: 'New session' })).toBeNull()
+      slot.update({ collapsed: false, width: 300, sidebarPage: 'second' })
+      expect(slot.view.getByText('Second browser')).toBeTruthy()
+      expect(slot.view.queryByText('First browser')).toBeNull()
+      await second.dispose()
+      expect(slot.view.queryByText('Second browser')).toBeNull()
+      expect(slot.view.getAllByRole('button', { name: 'Back to sessions' })).toHaveLength(2)
+    } finally {
+      await runtime.dispose()
+    }
+  })
+
   it('renders the expanded column in the default locale (zh, no setLocale)', async () => {
     const { runtime } = await bench()
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
+    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
     // Wordmark + capsule both start a session in the expanded state.
     expect(slot.view.getAllByRole('button', { name: '新建会话' })).toHaveLength(2)
     expect(slot.container).toMatchSnapshot()
@@ -63,7 +96,7 @@ describe('sidebar shell snapshots', () => {
 
   it('renders the expanded column (wordmark, capsule, empty holes)', async () => {
     const { runtime } = await bench({ locale: 'en' })
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
+    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
     // Wordmark + capsule both start a session in the expanded state.
     expect(slot.view.getAllByRole('button', { name: 'New session' })).toHaveLength(2)
     expect(slot.container).toMatchSnapshot()
@@ -72,9 +105,9 @@ describe('sidebar shell snapshots', () => {
 
   it('renders the collapsed rail after the crossfade settles, in place', async () => {
     const { runtime } = await bench({ locale: 'en' })
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
+    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
     const shell = slot.container.firstElementChild
-    slot.update({ collapsed: true, width: 56 })
+    slot.update({ collapsed: true, width: 56, sidebarPage: null })
     // The wide content (wordmark shortcut) unmounts at the 150ms settle;
     // only the rail's capsule remains a New-session button.
     await waitFor(() => {
@@ -88,7 +121,7 @@ describe('sidebar shell snapshots', () => {
 
   it('a locale switch refreshes mounted copy without re-registration', async () => {
     const { runtime, locale } = await bench()
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
+    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
     expect(slot.view.getAllByRole('button', { name: '新建会话' })).toHaveLength(2)
     // Same fiber, same registration: setLocale alone re-renders the outlet.
     act(() => { locale.setLocale('en') })

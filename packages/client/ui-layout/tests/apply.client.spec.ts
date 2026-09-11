@@ -67,6 +67,7 @@ describe('ui-layout client apply', () => {
     expect(slots.spec('details')).toEqual({ kind: 'single', scope: 'session' })
     expect(slots.spec('shell.overlay')).toEqual({ kind: 'list', scope: 'root' })
     expect(slots.spec('workspace.console')).toEqual({ kind: 'single', scope: 'root' })
+    expect(slots.spec('workspace.panel.header')).toEqual({ kind: 'keyed', scope: 'root' })
   })
 
   it('injects no business face and attaches the layout actions', async () => {
@@ -132,6 +133,8 @@ describe('ui-layout client apply', () => {
     expect(ctx.get('layout')).toBeUndefined()
     expect(slots.entries('root')).toHaveLength(0)
     expect(slots.spec('sidebar')).toBeUndefined()
+    expect(slots.spec('workspace.panel')).toBeUndefined()
+    expect(slots.spec('workspace.panel.header')).toBeUndefined()
     // The built-in root declaration survives entry teardown (renderer-owned).
     expect(slots.spec('root')).toEqual({ kind: 'single', scope: 'root' })
   })

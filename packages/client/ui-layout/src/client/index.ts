@@ -1,7 +1,7 @@
 /**
  * Layout plugin, browser half: one register() call contributes AppFrame into
  * the runtime's built-in 'root' slot and, in the same breath, declares the
- * four child slots (declaration = exclusive render authority), seats the
+ * child slots (declaration = exclusive render authority), seats the
  * layout store (panel geometry), and wires the panel-action service face.
  * ctx.layout is the cross-plugin panel-action contract; navigation state lives
  * with the runtime sessions service. A second effect seats the theme
@@ -98,6 +98,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `id` is added beside the shipped entries instead of replacing them.
      */
     'shell.overlay': { kind: 'list'; scope: 'root' }
+    /** Plugin-owned content in the native pane canvas, without Session ownership. */
+    'workspace.panel': { kind: 'single'; scope: 'root'; owner: PluginPaneOwnerProps }
+    /** Plugin-owned pane title and navigation beside layout-owned pane controls. */
+    'workspace.panel.header': { kind: 'keyed'; scope: 'root'; owner: PluginPaneOwnerProps }
     /** Human Terminal body rendered for each Console pane occurrence. */
     'workspace.console': { kind: 'single'; scope: 'root'; owner: ConsolePaneOwnerProps }
   }
@@ -111,6 +115,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Sidebar owner share: live column state from the frame's concession solve. */
 export interface SidebarOwnerProps {
+  /** Active contextual sidebar page, or null for the main Session list. */
+  sidebarPage: string | null
   /** True when the sidebar is closed (the column renders the compact control rail). */
   collapsed: boolean
   /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */
@@ -122,6 +128,18 @@ export interface ConvOwnerProps {}
 
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
+
+/** Owner share supplied to one plugin content pane. */
+export interface PluginPaneOwnerProps {
+  /** Plugin-owned address; independent of Agent and Console catalogs. */
+  actor: Extract<ActorRef, { kind: 'panel' }>
+  /** Device-local pane identity. */
+  paneId: string
+  /** Whether the pane is focused. */
+  active: boolean
+  /** Whether the mobile canvas shows only the focused pane. */
+  mobile: boolean
+}
 
 /** Owner share supplied to one Human Terminal renderer occurrence. */
 export interface ConsolePaneOwnerProps {
@@ -140,7 +158,7 @@ export const inject = ['slots', 'theme', 'sessions', 'locale']
 
 /**
  * Client plugin body: provide ctx.layout, then one register() call — AppFrame
- * into 'root' with the four child-slot declarations, the layout store seat,
+ * into 'root' with the child-slot declarations, the layout store seat,
  * and the inject hook that hands the store's bound actions to the service.
  * @param ctx - client root context.
  */
@@ -158,6 +176,8 @@ export function apply(ctx: ClientContext): void {
         'details': { kind: 'single', scope: 'session' },
         'shell.overlay': { kind: 'list', scope: 'root' },
         'workspace.console': { kind: 'single', scope: 'root' },
+        'workspace.panel': { kind: 'single', scope: 'root' },
+        'workspace.panel.header': { kind: 'keyed', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
       // entry and delivers useStore/actions to AppFrame as standard props.

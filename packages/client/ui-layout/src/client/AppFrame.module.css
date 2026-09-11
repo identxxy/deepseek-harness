@@ -109,6 +109,15 @@
   font-size: 12px;
 }
 
+.panePanelHeader {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
 .paneKind {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
