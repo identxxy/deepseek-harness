@@ -42,4 +42,5 @@ export function apply(ctx, value) {
   const runtime = createRuntime({ ...local, config });
   ctx.effect(() => () => local.close(), 'kitty: stop helper processes');
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/api/dsh/kitty', handler: createHandler(ctx, runtime, config) }), 'kitty: HTTP route');
+  ctx.on('webserver/index-inject', rows => rows.push({ kind: 'html', placement: 'head', html: '<link rel="preload" as="fetch" href="/api/dsh/kitty" crossorigin="anonymous">' }));
 }

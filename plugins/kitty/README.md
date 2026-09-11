@@ -36,6 +36,8 @@ For local installation, add `@deepseek-ai/dsh-kitty` as a `link:` dependency poi
 
 Open **Kitty terminal** to replace the sidebar session browser with **Kitty windows**. Each row shows its window ID, title, foreground program and working directory; click a row to enter that terminal. The native pane bar shows the selected window's title and back button. Desktop users can switch windows directly in the sidebar. On phones, the terminal's back button returns to the window list, and the list's back button returns to the main page. Browser back and forward follow the same hierarchy. Returning to the list retains the selected window and draft; selecting another window clears the draft and staged image.
 
+The page preloads the authenticated window list while the interface loads. Opening the chooser reuses an in-flight read or displays retained rows while refreshing them. Manual refresh replaces the pending read; failed reads remain retryable. Opening the home page does not select a Kitty window or send terminal input.
+
 Send submits the draft with Enter; Paste only leaves it in the terminal composer. Choosing an image creates a removable preview; sending combines the image reference and caption in one paste. One image can be staged at a time. Clipboard image paste and file drop use the same flow.
 
 The **Kitty terminal** button sits beside **New Terminal** in the sidebar’s primary actions and uses the same button styling. **New window** is available in the window chooser after selecting a terminal. It opens an independent Kitty OS window in that terminal's working directory with the default shell, preserves desktop focus and shows the new window ID in the chooser. Select that window after its shell starts. If the new shell is not listed yet, refresh the pane list; do not repeat creation. An existing local Kitty instance is required.
@@ -66,6 +68,8 @@ Directory configuration requires absolute paths. Images persist in UTC date subd
 The [Host](host-plugin.js) owns one [runtime](runtime.mjs), registers authenticated HTTP routes and executes Kitty through DSH subprocess. The [browser entry](src/client/index.ts) registers the sidebar. All requests pass the existing device gate and Connection Host/Origin/cookie checks. Pane tokens bind socket inode, creation information, PIDs and process start times; stale selections are rejected and input is queued. Unload aborts helper processes without closing user panes.
 
 The Client occupies the keyed `sidebar.page` and `workspace.panel.header` entries and the `workspace.panel` body in the native layout. These views share transient window selection, display settings and an authenticated catalog source. The shell owns responsive navigation and browser history. The terminal shares conversation/composer styles, buttons, icons and attachment presentation with DSH. Screen content is an ANSI terminal snapshot, not a structured DSH transcript.
+
+The Host contributes a credential-matched fetch preload to the index. Client activation consumes that response without waiting for it before the rest of the UI mounts. Catalog reads remain `no-store` HTTP responses; retained rows belong only to the current page. The Client build minifies JavaScript outside development builds and preserves function and class names.
 
 Image references use `[image](file://...)`: a leading exclamation mark invokes Codex shell mode. The ANSI renderer is adapted from the local Kitty Remote Deck implementation and rejects executable OSC hyperlinks.
 

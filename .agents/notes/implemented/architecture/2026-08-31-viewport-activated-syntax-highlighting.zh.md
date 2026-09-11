@@ -16,7 +16,7 @@ Status: implemented
 
 `CodeBlock` 同时控制定稿态的 `highlightToHtml` 调用和流式 `StreamingHighlightSession` 的创建。流式块激活时从当前累积源码开始，随后保留既有的增量 tokenizer 与 React 行缓存。`ReadBlock` 控制 `highlightLines`，同时保留其行和行号槽。纯文本臂与高亮臂使用相同的源码文本、代码字体、内边距、换行规则和行高；Shiki 现有的 token 颜色、粗体、斜体和下划线样式保持不变。
 
-模块级 Shiki 单例仍然预先预热。视口激活延迟的是代码块内容的 tokenize 与 token span 创建，不是固定的启动语法预热或纯文本内容 DOM。
+[按需初始化决策](2026-09-11-demand-initialized-syntax-highlighter.zh.md)负责单例构建：首次受支持的高亮请求构建 Shiki，并在用户内容扫描预算之外预热三种随包语法。视口激活将该请求与内容 tokenize、token span 创建一起延迟，但不延迟纯文本内容 DOM。
 
 ## Testing
 

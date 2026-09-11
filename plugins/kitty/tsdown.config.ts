@@ -70,6 +70,7 @@ const clientConfig: UserConfig = {
   format: 'cjs',
   platform: 'browser',
   target: 'es2024',
+  minify: process.env.NODE_ENV !== 'development',
   dts: false,
   sourcemap: true,
   clean: false,
@@ -126,6 +127,7 @@ const clientConfig: UserConfig = {
   }],
   outputOptions: {
     entryFileNames: 'client.js',
+    keepNames: true,
     banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(ID)}, factory: (require) => {`,
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',

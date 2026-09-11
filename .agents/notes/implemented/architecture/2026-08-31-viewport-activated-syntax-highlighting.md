@@ -16,7 +16,7 @@ The first intersecting entry removes its target from the observer and activates 
 
 `CodeBlock` gates both settled `highlightToHtml` calls and streaming `StreamingHighlightSession` creation. It starts an activated stream from the current accumulated source, then retains the existing incremental tokenizer and React line caches. `ReadBlock` gates `highlightLines` while retaining its line rows and gutter. The plain and highlighted arms keep the same source text, code font, padding, wrapping, and line height; Shiki's color, bold, italic, and underline token styles remain unchanged.
 
-The module-level Shiki singleton warm-up remains eager. Viewport activation defers code-block content tokenization and token-span construction, not the fixed boot-grammar warm-up or the plain content DOM.
+The [demand-initialization decision](2026-09-11-demand-initialized-syntax-highlighter.md) owns singleton construction: the first supported highlighting request constructs Shiki and warms the three bundled grammars outside the user-content scan budget. Viewport activation defers that request together with content tokenization and token-span construction; it does not defer the plain content DOM.
 
 ## Testing
 

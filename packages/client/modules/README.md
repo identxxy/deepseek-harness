@@ -43,6 +43,8 @@ The shell seeds a frozen module table (`PLATFORM_MODULES`: React, Cordis, and st
 
 The host serves built client bundles, so `pnpm run build` must have produced each `lib/client.js` before launch; a missing bundle fails activation loudly with one build instruction and a package/path list. Source launch maps host imports to TypeScript source but still consumes the built client export. The package accepts no plugin config of its own.
 
+The shared Client build preset minifies JavaScript unless `NODE_ENV=development`. Function and class names remain available to Cordis diagnostics, and source maps retain the original TypeScript and TSX. The [static frontend server](../../host/frontend-static/README.md) caches the shell's content-hashed assets; this package independently caches revisioned plugin scripts and maps.
+
 -----
 
 <a id="understand-the-implementation"></a>

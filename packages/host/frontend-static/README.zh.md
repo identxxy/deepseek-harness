@@ -43,6 +43,8 @@ kind: "package-reference"
 
 根路径与配置的 index 响应会在读取 HTML 前调用 `ctx.connection.authorizeIndex`。有效进程 token 会得到 303 重定向与持久浏览器 cookie；已有有效 cookie 时直接提供 index；其他 index 请求得到 Connection 所有的 401 响应。非 index 文件仍是公开静态资源。Token、cookie、过期时间与签名记录语义都归 Connection 所有。
 
+`assets/` 或 `preview/` 下成功返回的非 HTML 文件，其文件名符合 Vite 构建约定 `[name]-[hash].[ext]`、hash 为八位 URL 安全字符且可带 `.map` 后缀时，使用 `Cache-Control: public, max-age=31536000, immutable`。这些目录中的此类名称保留给内容哈希构建产物；字节内容改变必须更换文件名。HTML（包括认证后的 index）使用 `no-store`，其他成功返回的静态文件使用 `no-cache` 并在每次请求时重新读取。不存在的资源不应用 immutable 策略。
+
 ### 可观察的失败
 
 遍历返回 403 而不是错误页。dist 根目录内缺失或非文件的 target 返回空 404，因此失效链接或拼错的 pathname 是显式失败，而不是静默的 SPA 回退。第二次占据席位会抛错，而席位无人占据时 webserver 回答 404——本插件 fiber 被 dispose 后浏览器看到的就是它。

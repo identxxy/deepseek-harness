@@ -20,7 +20,7 @@ Status: implemented
 
 整行折叠/展开（把每个工具调用默认折叠）归[统一展开与检视 note](2026-07-30-web-tool-row-unified-expand-and-inspect.zh.md)所有，它已一次性翻转每张常驻卡片；本 note 的卡片是常驻的，与它旁边的终端卡片一致。
 
-**读取卡片的语法按需 lazy 加载，只有 boot 三种保持 eager。** `highlight.ts` 是 `ui-primitives` 在每次 Web 启动都加载的平台 seed，其预热会无条件构建 shiki 单例。读取卡片的 `langFromPath` 提示覆盖完整的源码/配置/标记扩展集（python、rust、yaml、html……）；把它们全部 eager 注册会给启动 chunk 增加约 1.6 MB 的语法模块、并把它们的同步初始化摊给每个会话，包括从不打开读取卡片的会话。因此只有每个会话本就渲染的三种语法 —— TypeScript、shell、JSON（markdown 围栏与 `run_code` 语言）—— 在 boot 时加载。每种读取卡片扩展语法置于 `LAZY_GRAMMARS` 中一个动态 `import()` 之后，以其别名解析到的语法 id 为键。对某个 lazy 语言首次调用 `highlightLines`/`highlightToHtml` 时，`ensureGrammar` 启动 import（仅一次）并返回未就绪，于是卡片该帧渲染纯文本；import 解析后用 `loadLanguageSync` 注册该语法、递增一个加载计数、并通知订阅者。`ReadBlock` 与 `CodeBlock` 通过 `useSyncExternalStore(subscribeGrammarLoaded, grammarLoadCount)` 订阅，因此语法就绪的那一刻卡片就重渲染带上高亮。未知/缺省语言仍同步返回 undefined（纯文本，绝不报错）。
+**读取卡片语法按需加载，仅三种语法随 core 打包。** TypeScript、shell 和 JSON 保留在初始 JavaScript bundle 中；依据[按需初始化决策](../architecture/2026-09-11-demand-initialized-syntax-highlighter.zh.md)，单例在首次受支持的高亮请求时注册它们。读取卡片的 `langFromPath` 提示覆盖源码、配置和标记扩展名；全部打包会使未使用它们的页面也增加约 1.6 MB 语法模块。23 种扩展语法各自置于 `LAZY_GRAMMARS` 中的动态 `import()` 之后，以别名解析到的语法 id 为键。首次对某个 lazy 语言调用 `highlightLines`/`highlightToHtml` 时，`ensureGrammar` 启动一次 import 并返回未就绪，卡片因此渲染纯文本；import 完成后使用 `loadLanguageSync` 注册语法、递增加载计数并通知订阅者。`ReadBlock` 与 `CodeBlock` 通过 `useSyncExternalStore(subscribeGrammarLoaded, grammarLoadCount)` 订阅，并在语法就绪时重渲染。未知或缺省语言同步返回 undefined，不构建单例。
 
 **空窗口的复制控件被隐藏，与 `TerminalBlock` 对齐。** 成功读取一个空文件会返回 `lines: []`、`totalLines: 0`，且 `presentResult` 仍投出 `card: 'read'`，因此空窗口分支是可达的。故 `ReadBlock` 在 `lines` 为空时隐藏复制控件，正如 `TerminalBlock` 对空输出隐藏复制，使按钮绝不会用空字符串清空剪贴板。
 
@@ -30,7 +30,7 @@ Status: implemented
 
 **复用 `highlightToHtml`，用 CSS counter 注入行号。** 拒绝：shiki 产出的单 `<pre>` HTML 没有可供行号栏挂上文件行号的逐行边界（窗口读取的行号从大于 1 处开始，不是简单的 CSS counter 自增），而从 HTML 里把行号解析回来又很脆弱。`codeToTokens` 直接给出逐行 token 结构。
 
-**在 boot 预热里 eager 注册所有读取卡片语法。** 拒绝：这会给每次 Web 启动摊上约 1.6 MB 语法模块及其同步初始化，只为一张多数会话从不打开的卡片。lazy 路径的代价是某个语言首次被读取时的一帧纯文本，随后在语法加载的重渲染里高亮；boot 代价只为每个会话本就渲染的三种语法付出。
+**随初始单例打包并注册全部读取卡片语法。** 拒绝：这会为读者可能从不查看的语言增加约 1.6 MB 语法模块及其同步注册成本。lazy 路径使各扩展语法留在初始 bundle 之外，并允许在 import 完成前显示纯文本；首次单例构建仅注册 TypeScript、shell 与 JSON。
 
 ## Consequences
 

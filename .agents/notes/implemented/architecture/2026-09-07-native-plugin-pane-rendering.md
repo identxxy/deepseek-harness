@@ -20,11 +20,15 @@ Kitty shares the primary sidebar action slot and Console creation-button styles.
 
 External session browsers occupy keyed `sidebar.page` entries. The layout owns the transient page key and mobile destination together, so its browser history represents the main list, the plugin's window list and the selected terminal. Kitty owns its window catalog and selection; returning to its list retains the selected window and draft. Choosing another window remounts the terminal body to discard the previous draft, image and screen request.
 
+Kitty's authenticated catalog starts through an index fetch preload, so its request overlaps plugin loading. Client activation consumes the preload and owns its pending read independently from view mounting. Opening the chooser shares a pending read or displays retained rows while refreshing; forced refresh cancels its predecessor and only the latest response publishes. Unload aborts and drains every catalog read. HTTP responses remain `no-store`, and the home page retains its ordinary navigation without selecting a terminal.
+
 ## Alternatives considered
 
 A separate overlay duplicates native navigation and composition styling. Reusing Agent or Console actors misstates ownership. Parsing terminal screens into model transcripts remains excluded for the reasons in [Host-owned Console Sessions](../../rejected/feature/2026-08-25-host-owned-console-sessions.md); the terminal screen is displayed as a snapshot.
 
 **A terminal-header dropdown** makes mobile window switching depend on a compact form control and leaves the parent list outside browser history. **Replacing the workspace slot registration** removes its declared child slots. A separate keyed page keeps those declarations available while the shell selects the browsing content.
+
+**Fetching the catalog only after a click** puts discovery and a network round trip after the entire plugin boot. A page-local preload overlaps those costs without persisting process-bound pane tokens or changing the all-plugin activation requirement.
 
 ## Consequences
 

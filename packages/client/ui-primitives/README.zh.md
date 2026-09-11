@@ -65,6 +65,8 @@ kind: "package-library"
 
 回复流式输出期间，`MarkdownText` 增量解析：除末尾两个块外全部冻结为缓存的 React 元素，每个分片只重新解析其后的源文本尾部，因此每分片的工作量跟随尾部而非整个回复。末尾的顶层未闭合 fence 会保留已解析的 code node，只把最后一个已完成行与当前未完成行交给同一套 GFM grammar；闭合 fence 或有歧义的解析会回到普通尾部路径。高亮同样从保存的 Shiki grammar state 续接，并只发布新完成行与可变尾部。`CodeBlock` 把已完成行封入固定大小的 React 分组、复用更早的分组，并在代码与语言未变化时跨定稿保留整棵高亮树。定稿时的全量解析仍会解析跨过冻结边界的引用（[增量渲染器](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.zh.md)、[流式 fence 高亮](../../../.agents/notes/implemented/feature/2026-08-20-web-streaming-fence-highlight.zh.md)）。
 
+语法高亮使用一个同步 Shiki 单例，由首次受支持的高亮请求构建，而非导入模块时构建。`CodeBlock` 与 `ReadBlock` 将该请求延迟至视口激活；没有已激活受支持代码的页面（包括仅查看 Kitty 的页面）不构建单例。TypeScript、shell 和 JSON 仍随包提供，在构建时于用户内容扫描预算之外预先 tokenize；其他 23 种语法仍通过动态 import 加载。首个激活的受支持代码块承担初始化成本（[初始化决策](../../../.agents/notes/implemented/architecture/2026-09-11-demand-initialized-syntax-highlighter.zh.md)、[视口激活](../../../.agents/notes/implemented/architecture/2026-08-31-viewport-activated-syntax-highlighting.zh.md)）。
+
 ### 几何与溢出
 
 输出卡片共享同一套几何模型：`white-space: pre` 并横向滚动，让按列对齐的内容保持对齐；超过 `maxLines`（默认 16）时折叠为头部切片加尾部切片，由展开按钮控制，长正文不会撑高卡片。`TerminalBlock` 把 ANSI 解析为 React span，并带逐行列缓冲处理光标移动，遵循行内擦除、制表位与字符宽度。

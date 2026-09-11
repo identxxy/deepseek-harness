@@ -6,15 +6,17 @@
  * unknown extensions ship as octet-stream, and non-GET/HEAD is 405. Every
  * index response first passes Connection's browser authentication, then the
  * webserver's index render (structured injection rows, then raw taps).
- * Non-index assets stay public. The dist location is workspace knowledge of
- * the composing application, so `distIndex` is typically supplied through a
- * `!!js` expression, never hardcoded by a deployment.
+ * HTML is never cached; content-hashed build assets are immutable, while
+ * other static files require revalidation. Non-index assets stay public. The
+ * dist location is workspace knowledge of the composing application, so
+ * `distIndex` is typically supplied through a `!!js` expression, never hardcoded
+ * by a deployment.
  * @module @deepseek-ai/dsh-host-frontend-static
  */
 
 import type { ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
+import { dirname, extname, join, normalize, relative, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-client-connection'
@@ -37,6 +39,10 @@ export const Config: z<Config> = z.object({
 })
 
 const HTML_MIME = 'text/html; charset=utf-8'
+
+// Vite's content-hashed output directories are reserved for build artifacts.
+const HASHED_ASSET = /^(?:assets|preview)\/(?:[^/]+\/)*[^/]+-[A-Za-z0-9_-]{8}\.[A-Za-z0-9]+(?:\.map)?$/
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
 
 const MIME: Record<string, string> = {
   '.html': HTML_MIME,
@@ -101,7 +107,12 @@ export async function serveStatic(
     res.end()
     return
   }
-  res.writeHead(200, { 'content-type': type })
+  const cacheControl = type === HTML_MIME
+    ? 'no-store'
+    : HASHED_ASSET.test(relative(distRoot, target).split(sep).join('/'))
+      ? IMMUTABLE_CACHE
+      : 'no-cache'
+  res.writeHead(200, { 'content-type': type, 'cache-control': cacheControl })
   res.end(body)
 }
 

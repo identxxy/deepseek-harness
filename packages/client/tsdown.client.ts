@@ -95,7 +95,8 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * workspace layout, so the lib half must be restated here — dropping it leaves
  * the package without lib/index.js and the host Loader cannot import its node
  * half. The Client build consumes `lib/types` and chains those tsc maps, with
- * original source content, into the standalone plugin map.
+ * original source content, into the standalone plugin map. Browser JavaScript
+ * is minified outside development builds, preserving function and class names.
  * @param id - plugin id (package name), stamped into the __ModuleLoader__.load
  * handoff and onto the injected style tags.
  * @param libEntry - node-half entries, spelled at the call site so the
@@ -436,6 +437,7 @@ function clientConfig(id: string, entry: string): UserConfig {
     outDir: 'lib',
     format: 'cjs',
     platform: 'browser',
+    minify: process.env.NODE_ENV !== 'development',
     // Types ship from lib/types (tsc); dts here would wrap the banner/footer into .d.cts and break parsing.
     dts: false,
     // Plugin code is fetched outside Vite's module graph, so its own bundle
@@ -560,6 +562,7 @@ function clientConfig(id: string, entry: string): UserConfig {
     }],
     outputOptions: {
       entryFileNames: 'client.js',
+      keepNames: true,
       sourcemapExcludeSources: false,
       // The map is served from /plugins/<scoped-package>/client.js.map. The
       // browser resolves its local sources back into URLs that mirror the

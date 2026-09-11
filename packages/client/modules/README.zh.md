@@ -43,6 +43,8 @@ application combo 脚本在启动时注册插件 factory；模块主体仍保持
 
 宿主提供的是已构建的客户端 bundle，因此启动前 `pnpm run build` 必须已产出每个 `lib/client.js`；缺失 bundle 会以一条构建说明加包／路径列表的方式让激活大声失败。源码启动会把宿主侧导入映射到 TypeScript 源码，但仍消费这一构建后的客户端导出。本包自身不接受任何插件配置。
 
+共享 Client 构建预设会压缩 JavaScript，除非设置 `NODE_ENV=development`。函数名和类名保留供 Cordis 诊断使用，source map 保留原始 TypeScript 和 TSX。[静态前端服务器](../../host/frontend-static/README.zh.md) 缓存外壳中带内容哈希的资源；本包独立缓存带 revision 的插件脚本和 map。
+
 -----
 
 <a id="understand-the-implementation"></a>

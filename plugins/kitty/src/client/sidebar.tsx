@@ -6,9 +6,10 @@ import { endpoint, request, type KittyCatalog } from './catalog.ts';
 import type { createKittyStore } from './stores.ts';
 import './panel.css';
 
-/** Private catalog source and refresh action supplied at slot registration. */
+/** Private catalog source and shared-read or forced-refresh actions supplied at slot registration. */
 export type KittyCatalogInjected = {
   hooks: { catalog: KittyCatalog['source'] };
+  load: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -21,7 +22,7 @@ type KittyBrowserProps = PropsLocale<'dsh.kitty'> & PropsRuntime<'sidebar.page'>
  * @param props - column geometry, catalog hook, selection and navigation actions.
  * @returns the window browser or its collapsed-rail control.
  */
-export function KittyBrowser({ t, wide, expandSidebar, useCatalog, useStore, actions, refresh, open, backHome }: KittyBrowserProps) {
+export function KittyBrowser({ t, wide, expandSidebar, useCatalog, useStore, actions, load, refresh, open, backHome }: KittyBrowserProps) {
   const { value, loading, failed } = useCatalog(s => s);
   const { selected, result, follow, history, wideScreen } = useStore(s => s);
   const pane = value?.panes.find(p => p.token === selected);
@@ -31,7 +32,7 @@ export function KittyBrowser({ t, wide, expandSidebar, useCatalog, useStore, act
   const busy = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  useEffect(() => { if (wide) void refresh(); }, [wide, refresh]);
+  useEffect(() => { if (wide) void load(); }, [wide, load]);
   async function createWindow() {
     if (!pane || busy.current) return;
     busy.current = true;

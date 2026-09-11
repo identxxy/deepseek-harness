@@ -96,6 +96,65 @@ async function request(port: number, path: string, init?: RequestInit): Promise<
 }
 
 describe('real Loader composition', () => {
+  it('caches content-hashed build assets without caching HTML or stale mutable files', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const origin = `http://127.0.0.1:${String(loaded.webServer.port)}`
+    const dist = join(root!, 'dist')
+    const immutablePaths = [
+      'assets/index-AbCd123_.js',
+      'assets/vendor-abcDEF-1.css',
+      'assets/langs/swift-D82vCrfD.js.map',
+      'assets/fonts/KaTeX_Main-Regular-AbCd1234.woff2',
+      'preview/bootstrap-CIt8NvlA.js',
+    ]
+    const mutablePaths = [
+      'app.js', 'manifest.webmanifest', 'assets/app.js', 'assets/app-short.js', 'index-AbCd1234.js',
+    ]
+    for (const path of [...immutablePaths, ...mutablePaths, 'assets/page-AbCd1234.html']) {
+      await mkdir(join(dist, path, '..'), { recursive: true })
+      await writeFile(join(dist, path), 'fixture')
+    }
+    for (const path of immutablePaths) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = await fetch(`${origin}/${path}?revision=ignored`, { method })
+        expect(response.status).toBe(200)
+        expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+        expect(await response.text()).toBe(method === 'HEAD' ? '' : 'fixture')
+      }
+    }
+    for (const path of mutablePaths) {
+      const response = await fetch(`${origin}/${path}`)
+      expect(response.headers.get('cache-control')).toBe('no-cache')
+      await response.arrayBuffer()
+    }
+    await writeFile(join(dist, 'app.js'), 'rebuilt')
+    expect(await (await fetch(`${origin}/app.js`)).text()).toBe('rebuilt')
+    const htmlAsset = await fetch(`${origin}/assets/page-AbCd1234.html`)
+    expect(htmlAsset.headers.get('cache-control')).toBe('no-store')
+    await htmlAsset.arrayBuffer()
+    const exchange = await fetch(loaded.connection.authenticatedUrl(origin), { redirect: 'manual' })
+    expect(exchange.status).toBe(303)
+    expect(exchange.headers.get('cache-control')).toBe('no-store')
+    const cookie = exchange.headers.get('set-cookie')!.split(';', 1)[0]!
+    await exchange.arrayBuffer()
+    for (const path of ['/', '/index.html']) {
+      const denied = await fetch(`${origin}${path}`)
+      expect(denied.status).toBe(401)
+      expect(denied.headers.get('cache-control')).toBe('no-store')
+      await denied.arrayBuffer()
+      const allowed = await fetch(`${origin}${path}`, { headers: { cookie } })
+      expect(allowed.status).toBe(200)
+      expect(allowed.headers.get('cache-control')).toBe('no-store')
+      await allowed.arrayBuffer()
+    }
+    for (const path of ['assets/missing-AbCd1234.js', 'no/such/route']) {
+      const response = await fetch(`${origin}/${path}`)
+      expect(response.status).toBe(404)
+      expect(response.headers.get('cache-control') ?? '').not.toContain('immutable')
+      await response.arrayBuffer()
+    }
+  })
+
   it('serves explicit index entries and files while preserving HTTP error semantics', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
     const unloaded = [...loaded.loader.entries()]

@@ -1,0 +1,8 @@
+- region "Kitty windows":
+  - button "Back to home":
+    - img
+  - heading "Kitty windows" [level=2]
+  - button "New window" [disabled]
+  - button "Loading…" [disabled]
+  - button "Terminal options":
+    - img

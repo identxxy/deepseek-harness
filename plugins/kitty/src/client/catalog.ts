@@ -26,7 +26,16 @@ export class KittyCatalog {
   /** Latest catalog and request status, bound to renderer-owned hooks. */
   readonly source = createSnapshotStore<{ value: KittyList | null; loading: boolean; failed: boolean }>({ value: null, loading: false, failed: false });
   #controller: AbortController | undefined;
+  #currentPromise: Promise<void> | undefined;
   #pending = new Set<Promise<void>>();
+
+  /**
+   * Reuse the current read, or refresh the retained catalog when idle.
+   * @returns the current or newly started catalog read.
+   */
+  load(): Promise<void> {
+    return this.#currentPromise ?? this.refresh();
+  }
 
   /**
    * Refresh the list, publishing only the latest request's result.
@@ -42,8 +51,12 @@ export class KittyCatalog {
     }, () => {
       if (!controller.signal.aborted) this.source.update(d => { d.loading = false; d.failed = true; });
     });
+    this.#currentPromise = pending;
     this.#pending.add(pending);
-    void pending.finally(() => { this.#pending.delete(pending); });
+    void pending.finally(() => {
+      this.#pending.delete(pending);
+      if (this.#currentPromise === pending) this.#currentPromise = undefined;
+    });
     return pending;
   }
 

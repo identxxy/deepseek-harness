@@ -46,6 +46,8 @@ Host 会快照每个已构建插件产物，并把每个调度阶段的有序 ro
 
 图为 HMR 保留每个 row 带 revision 的单资源 combo URL，并为每个启动 combo 请求增加按内容寻址的描述；多条描述可以使用同一调度阶段。初始 row revision 是进程级不透明 nonce，而不是内容哈希；它无需在启动时哈希每个插件，也能保证已快照的单资源响应不可变。watcher 观察到某个产物变化后，`rebuilt(id)` 只哈希该 bundle 与 map，并发布所得 revision。启动 combo revision 覆盖合并脚本输入与 indexed map。版本化脚本与 map 使用 immutable 缓存。Host 只提供精确生成的 URL；陈旧 revision 与未发布资源列表返回 404，不会别名到其他字节。外部脚本的 `error` 事件不给响应状态与正文，因此失败诊断只报告 URL；同源 Host 与构建期写入的 registration id 是身份边界，`load` 后的 factory 存在性检查负责拒绝未登记预期 id 的产物。
 
+共享 Client 预设在非开发模式下压缩浏览器 JavaScript，同时保留函数名与类名以供 Cordis 诊断。原始源码仍可通过 source map 查看。压缩会改变产物字节与 revision，但不改变 factory 登记或激活顺序。[静态前端服务器](../../../../packages/host/frontend-static/README.zh.md) 还会把文件名含内容哈希的壳资源标记为 immutable，而 HTML 不可缓存。
+
 ### 装载流程，端到端
 
 从 `dsh web` 启动到 UI 出现之间发生了什么？三个阶段：host 组合 graph 并由 parser 预载 bootstrap factory，HTML facade 创建模块系统且外壳执行预取，然后 Cordis 编排。

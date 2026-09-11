@@ -1,5 +1,5 @@
 /** Real Loader/browser Kitty navigation with only terminal HTTP responses replaced. */
-import { copyFile, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
@@ -41,6 +41,10 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
   let staleToken = ''
   let mutations: string[]
   let allowCreate = false
+  let catalogReads = 0
+  let catalogBarrier: Promise<void> | undefined
+  let releaseCatalog: (() => void) | undefined
+  const pendingCatalogResponses = new Set<Promise<void>>()
 
   beforeAll(async () => {
     fixtureRoot = await mkdtemp(join(tmpdir(), 'dsh-kitty-browser-'))
@@ -57,8 +61,12 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
       name: 'dsh-kitty-browser-fixture',
       dependencies: { '@deepseek-ai/dsh-kitty': '0.1.0' },
     }))
+    const socketDirectory = join(fixtureRoot, 'sockets')
+    await mkdir(socketDirectory)
+    const overlayPath = join(fixtureRoot, 'kitty.patch.yml')
+    await writeFile(overlayPath, `${await readFile(join(KITTY_ROOT, 'cordis.patch.yml'), 'utf8')}\n- id: kitty-host\n  config:\n    socketDirectory: ${JSON.stringify(socketDirectory)}\n`)
     scaffold = await launchWebScaffold({
-      extraOverlayPath: join(KITTY_ROOT, 'cordis.patch.yml'),
+      extraOverlayPath: overlayPath,
       extraInstallAnchors: [installAnchor],
     })
     browser = await chromium.launch()
@@ -74,6 +82,9 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     staleToken = ''
     mutations = []
     allowCreate = false
+    catalogReads = 0
+    catalogBarrier = undefined
+    releaseCatalog = undefined
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
     page.setDefaultTimeout(15_000)
@@ -98,15 +109,24 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
           : { json: { text: `${marker}\n${SCREEN_SAMPLE}` } })
         return
       }
-      await route.fulfill(listError
-        ? { status: 500, json: { error: 'kitty_operation_failed' } }
-        : { json: { panes, pollIntervalMs: 60_000, maxImageBytes: 8 * 1024 * 1024 } })
+      catalogReads += 1
+      const response = (async () => {
+        await catalogBarrier
+        await route.fulfill(listError
+          ? { status: 500, json: { error: 'kitty_operation_failed' } }
+          : { json: { panes, pollIntervalMs: 60_000, maxImageBytes: 8 * 1024 * 1024 } })
+      })()
+      pendingCatalogResponses.add(response)
+      try { await response }
+      finally { pendingCatalogResponses.delete(response) }
     })
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.getByRole('button', { name: 'Kitty terminal', exact: true }).waitFor()
   })
 
   afterEach(async ({ task }) => {
+    releaseCatalog?.()
+    await Promise.all([...pendingCatalogResponses])
     try {
       if (task.result?.state === 'fail' && page !== undefined && !page.isClosed()) {
         await mkdir(ARTIFACTS, { recursive: true })
@@ -148,6 +168,104 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await compareOrRefreshGolden(join(EXPECTED, `${name}.expected.md`),
       await captureStableAria(page, '.dsh-kitty-browser', scaffold.workspaceCwd), MODE)
   }
+
+  it('starts catalog transport before plugin boot and shares the pending read with the chooser', async () => {
+    catalogReads = 0
+    catalogBarrier = new Promise<void>((resolve) => { releaseCatalog = resolve })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByRole('button', { name: 'Kitty terminal', exact: true }).waitFor()
+    expect(catalogReads).toBe(1)
+    await page.getByRole('button', { name: 'Kitty terminal', exact: true }).click()
+    await page.getByRole('button', { name: 'Loading…', exact: true }).waitFor()
+    await snapshot('loading-windows')
+    expect(catalogReads).toBe(1)
+    catalogBarrier = undefined
+    releaseCatalog?.()
+    await page.getByRole('button', { name: '#1 · Alpha terminal', exact: true }).waitFor()
+    expect(catalogReads).toBe(1)
+    expect(await page.evaluate(() => performance.getEntriesByType('resource')
+      .filter(entry => new URL(entry.name).pathname === '/api/dsh/kitty')
+      .map(entry => (entry as PerformanceResourceTiming).initiatorType))).toEqual(['link'])
+    await showScreen('Alpha')
+  })
+
+  it('keeps cached windows selectable while refreshing the catalog on return', async () => {
+    await openWindows()
+    await page.getByRole('button', { name: 'Refresh panes', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Back to home', exact: true }).click()
+    catalogBarrier = new Promise<void>((resolve) => { releaseCatalog = resolve })
+    const previousReads = catalogReads
+    await page.getByRole('button', { name: 'Kitty terminal', exact: true }).click()
+    await page.getByRole('button', { name: 'Loading…', exact: true }).waitFor()
+    await expect.poll(() => catalogReads).toBe(previousReads + 1)
+    await showScreen('Beta')
+    catalogBarrier = undefined
+    releaseCatalog?.()
+  })
+
+  it('reuses cached application scripts and styles when opening Kitty after a reload', async () => {
+    // Browser route interception disables HTTP caching; this page uses the real empty Kitty socket directory.
+    const cachedPage = await newEnglishPage(browser)
+    const cachedConsole = watchConsole(cachedPage)
+    try {
+      if (process.env.DSH_KITTY_PERF === '1') {
+        const cdp = await cachedPage.context().newCDPSession(cachedPage)
+        await cdp.send('Network.enable')
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
+        await cdp.send('Network.emulateNetworkConditions', {
+          offline: false, latency: 80, downloadThroughput: 10_000_000 / 8, uploadThroughput: 2_000_000 / 8,
+        })
+      }
+      await cachedPage.addInitScript(() => {
+        let seenBoot = false
+        const observer = new MutationObserver(() => {
+          const boot = document.querySelector('[data-dsh-boot]')
+          if (boot !== null) seenBoot = true
+          if (seenBoot && boot === null) {
+            performance.mark('kitty-test:app-ready')
+            observer.disconnect()
+          }
+        })
+        observer.observe(document, { subtree: true, childList: true })
+        document.addEventListener('click', (event) => {
+          if (event.target instanceof Element && event.target.closest('button')?.getAttribute('aria-label') === 'Kitty terminal') {
+            performance.mark('kitty-test:open')
+          }
+        })
+      })
+      const reports = []
+      for (const navigation of ['cold', 'reload'] as const) {
+        if (navigation === 'cold') await cachedPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+        else await cachedPage.reload({ waitUntil: 'load' })
+        await cachedPage.getByRole('button', { name: 'Kitty terminal', exact: true }).click()
+        await cachedPage.getByText('No Kitty panes found', { exact: true }).waitFor()
+        reports.push(await cachedPage.evaluate(navigation => ({
+          navigation,
+          appReadyMs: performance.getEntriesByName('kitty-test:app-ready')[0]!.startTime,
+          openToListMs: performance.now() - performance.getEntriesByName('kitty-test:open')[0]!.startTime,
+          resources: performance.getEntriesByType('resource')
+            .filter((entry) => {
+              const path = new URL(entry.name).pathname
+              return path === '/plugins/' || /^\/assets\/.*\.(?:js|css)$/.test(path)
+            })
+            .map((entry) => {
+              const resource = entry as PerformanceResourceTiming
+              return { url: resource.name, transferSize: resource.transferSize, decodedBodySize: resource.decodedBodySize }
+            }),
+        }), navigation))
+      }
+      const [cold, reloaded] = reports
+      expect(cold!.resources.length).toBeGreaterThan(0)
+      expect(cold!.resources.every(resource => resource.transferSize > 0)).toBe(true)
+      expect(reloaded!.resources.map(resource => resource.url).sort()).toEqual(cold!.resources.map(resource => resource.url).sort())
+      expect(reloaded!.resources.every(resource => resource.transferSize === 0 && resource.decodedBodySize > 0)).toBe(true)
+      expect(cachedConsole).toEqual({ warnings: [], pageErrors: [] })
+      if (process.env.DSH_KITTY_PERF === '1') {
+        await mkdir(ARTIFACTS, { recursive: true })
+        await writeFile(join(ARTIFACTS, 'startup-performance.json'), JSON.stringify(reports, null, 2) + '\n')
+      }
+    } finally { await cachedPage.close() }
+  })
 
   it('replaces the desktop session list with windows and switches directly between terminals', async () => {
     await openWindows()

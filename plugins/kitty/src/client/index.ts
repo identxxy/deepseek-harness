@@ -22,9 +22,10 @@ export const inject = ['slots', 'locale', 'layout'];
 export function apply(ctx: Context): void {
   const store = createKittyStore();
   const catalog = new KittyCatalog();
-  const catalogProps = { hooks: { catalog: catalog.source }, refresh: () => catalog.refresh() };
+  const catalogProps = { hooks: { catalog: catalog.source }, load: () => catalog.load(), refresh: () => catalog.refresh() };
   ctx.effect(() => ctx.locale.register('dsh.kitty', { en, zh }), 'kitty: dictionaries');
   ctx.effect(() => () => catalog.dispose(), 'kitty: catalog requests');
+  void catalog.load();
   ctx.slots.inject('sidebar.primary.action', () => ctx.slots.register({
     name: 'sidebar.primary.action', id: 'kitty-terminal', order: 10, locale: 'dsh.kitty', store,
     inject: (actions: KittyActions) => ({ open: () => {
