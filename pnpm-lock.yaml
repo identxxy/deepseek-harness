@@ -10115,6 +10115,16 @@ importers:
         version: link:../../typert/protocol
 
   plugins/kitty:
+    dependencies:
+      css-tree:
+        specifier: 3.2.1
+        version: 3.2.1
+      mime-types:
+        specifier: 3.0.2
+        version: 3.0.2
+      parse5:
+        specifier: 8.0.1
+        version: 8.0.1
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^

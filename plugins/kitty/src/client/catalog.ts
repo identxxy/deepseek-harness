@@ -16,6 +16,7 @@ export const endpoint = '/api/dsh/kitty';
  */
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: 'same-origin', ...init });
+  if (response.status === 404) throw new Error('kitty_endpoint_unavailable');
   const value = await response.json();
   if (!response.ok) throw new Error(value.error ?? 'kitty_operation_failed');
   return value as T;

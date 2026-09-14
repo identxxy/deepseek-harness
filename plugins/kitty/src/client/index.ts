@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import { KittyAction, KittyPane } from './panel.tsx';
 import { KittyBrowser } from './sidebar.tsx';
 import { KittyHeader } from './header.tsx';
+import { KittyPreview } from './preview.tsx';
 import { KittyCatalog } from './catalog.ts';
 import { createKittyStore, type KittyActions } from './stores.ts';
 import { en, zh } from './locales.ts';
@@ -26,6 +27,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('dsh.kitty', { en, zh }), 'kitty: dictionaries');
   ctx.effect(() => () => catalog.dispose(), 'kitty: catalog requests');
   void catalog.load();
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'kitty-browser', locale: 'dsh.kitty', store,
+  }, KittyPreview));
   ctx.slots.inject('sidebar.primary.action', () => ctx.slots.register({
     name: 'sidebar.primary.action', id: 'kitty-terminal', order: 10, locale: 'dsh.kitty', store,
     inject: (actions: KittyActions) => ({ open: () => {

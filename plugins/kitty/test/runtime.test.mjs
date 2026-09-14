@@ -31,6 +31,15 @@ test('rejects malformed and oversized input before invoking Kitty', async () => 
   }
   assert.equal(calls.length, 0);
 });
+test('Alt+Up reaches only the selected pane and stale selections send no key', async () => {
+  const { runtime, calls, change } = fixture();
+  const [pane] = await runtime.list();
+  await runtime.action({ token: pane.token, action: 'key', key: 'alt+up' });
+  assert.deepEqual(calls, [{ args: ['send-key', '--match', 'id:4', 'alt+up'], stdin: undefined }]);
+  change();
+  await assert.rejects(runtime.action({ token: pane.token, action: 'key', key: 'alt+up' }), /stale_target/);
+  assert.equal(calls.length, 1);
+});
 test('no implicit target and no stale reads', async () => {
   const { runtime, change } = fixture(); const [pane] = await runtime.list();
   await assert.rejects(runtime.screen(''), /target/);

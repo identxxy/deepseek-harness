@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const KEYS = ['enter', 'escape', 'tab', 'up', 'down', 'left', 'right', 'home', 'end', 'backspace', 'ctrl+c', 'ctrl+d', 'ctrl+a', 'ctrl+e', 'ctrl+l', 'ctrl+u'];
+export const KEYS = ['enter', 'escape', 'tab', 'up', 'alt+up', 'down', 'left', 'right', 'home', 'end', 'backspace', 'ctrl+c', 'ctrl+d', 'ctrl+a', 'ctrl+e', 'ctrl+l', 'ctrl+u'];
 const IMAGE_TYPES = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif', 'image/heic': '.heic', 'image/heif': '.heif' };
 
 /** Build a runtime with process discovery and a bounded Kitty command executor. */

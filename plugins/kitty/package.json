@@ -60,5 +60,10 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "css-tree": "3.2.1",
+    "mime-types": "3.0.2",
+    "parse5": "8.0.1"
   }
 }

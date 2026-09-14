@@ -4,8 +4,8 @@ import { join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 
 export function resolveConfig(value = {}) {
-  const config = { binary: 'kitty', socketDirectory: '/tmp', socketPrefix: 'kitty.sock-', timeoutMs: 20_000, graceMs: 500, maxOutputBytes: 4 * 1024 * 1024, maxTextBytes: 128 * 1024, maxImageBytes: 8 * 1024 * 1024, maxQueuedActions: 16, pollIntervalMs: 5000, imageDirectory: join(homedir(), 'Pictures', 'voxpress'), ...value };
-  for (const key of ['timeoutMs', 'graceMs', 'maxOutputBytes', 'maxTextBytes', 'maxImageBytes', 'maxQueuedActions', 'pollIntervalMs']) {
+  const config = { binary: 'kitty', socketDirectory: '/tmp', socketPrefix: 'kitty.sock-', timeoutMs: 20_000, graceMs: 500, maxOutputBytes: 4 * 1024 * 1024, maxTextBytes: 128 * 1024, maxImageBytes: 8 * 1024 * 1024, maxQueuedActions: 16, pollIntervalMs: 5000, previewMaxBytes: 64 * 1024 * 1024, previewMaxResources: 64, imageDirectory: join(homedir(), 'Pictures', 'voxpress'), ...value };
+  for (const key of ['timeoutMs', 'graceMs', 'maxOutputBytes', 'maxTextBytes', 'maxImageBytes', 'maxQueuedActions', 'pollIntervalMs', 'previewMaxBytes', 'previewMaxResources']) {
     if (!Number.isSafeInteger(config[key]) || config[key] < 1) throw new Error(`Invalid Kitty configuration: ${key}`);
   }
   for (const key of ['socketDirectory', 'imageDirectory']) if (typeof config[key] !== 'string' || !isAbsolute(config[key])) throw new Error(`Kitty ${key} must be absolute`);

@@ -38,11 +38,15 @@ pnpm run check:kitty
 
 页面在界面加载期间预取已认证的窗口列表。打开选择页时复用进行中的读取，或先显示保留的列表并同时刷新。手动刷新会替换正在进行的读取；读取失败后仍可重试。打开主页面不会选择 Kitty 窗口，也不会发送终端输入。
 
-“发送”会按 Enter 提交草稿；“仅粘贴”保留在终端输入框。选图生成可移除预览，发送时图片引用与说明合并为一次粘贴。每次可暂存一张图片，剪贴板图片及拖放使用相同流程。
+“发送”会按 Enter 提交草稿；“仅粘贴”保留在终端输入框。打开**终端按键**并点击 **Alt + ↑**，即可向所选终端发送该组合键，例如切换到 Codex 的待回答问题。该快捷键在手机上排在首位，并保留草稿。选图生成可移除预览，发送时图片引用与说明合并为一次粘贴。每次可暂存一张图片，剪贴板图片及拖放使用相同流程。
 
 **Kitty 终端**与**新建终端**同属侧栏顶部操作区，共用按钮样式。选择终端后，可在窗口选择页使用**新建窗口**。它会在所选终端的工作目录中打开独立 Kitty 系统窗口，运行默认 shell，保持桌面焦点，并在选择页显示新窗口 ID。等待 shell 启动后选择该窗口。若新 shell 尚未列出，请刷新列表，不要重复创建。此功能需要已有本机 Kitty 实例。
 
 屏幕默认折行；手机端的终端输出和草稿采用更紧凑的行距。窗口选择页的**终端选项**提供原始行宽、历史屏幕及跟随模式，切换窗口时保留这些设置。Ctrl/⌘ Enter 发送草稿，输入框内 Enter 换行。关闭面板停止轮询。从 profile 移除此 bundle 和依赖会卸载插件，不删除 CLI 或 DSH 会话数据。
+
+点击终端中的 HTTP(S) 或 `file://` 链接，即可在右侧打开**浏览器**。它从 DSH 主机读取报告，包括使用相对路径样式、图片和脚本的本地 HTML 报告。拖动左边缘调整宽度，固定小窗后可同时操作终端，也可以通过右侧竖排 **BROWSER** 窄标签重新打开。手机上向右滑动浏览器标题栏即可关闭。系统浏览器返回先收起小窗，再从终端返回窗口列表和主页面；小窗自己的返回与前进按钮用于报告导航。关闭小窗保留终端草稿和当前报告。
+
+地址栏和终端链接会开始新的报告历史。报告内的链接和 GET 表单只能访问其真实目录或 HTTP 来源；显式输入地址可选择其他位置。相对路径的 GET/HEAD `fetch` 请求遵循相同限制。导航失败时保留当前报告。报告在沙箱中运行，无法访问 DSH 页面或凭据。
 
 ### 配置
 
@@ -53,9 +57,12 @@ pnpm run check:kitty
 | `timeoutMs`, `graceMs` | `20000`, `500` |
 | `maxOutputBytes`, `maxTextBytes`, `maxImageBytes` | `4194304`, `131072`, `8388608` |
 | `maxQueuedActions`, `pollIntervalMs` | `16`, `5000` |
+| `previewMaxBytes`, `previewMaxResources` | `67108864`, `64` |
 | `imageDirectory` | `~/Pictures/voxpress` |
 
 目录配置要求绝对路径。图片保存在 UTC 日期子目录，直至用户清理。支持 PNG、JPEG、WebP、GIF、HEIC、HEIF。配置校验与默认值由 [local.mjs](local.mjs) 定义。
+
+报告读取使用 `timeoutMs`；`maxQueuedActions` 同时限制并发预览请求数。`previewMaxBytes` 限制每次请求的源文件字节数、资源展开量和 JSON 输出量；base64 资源计入输出限制。默认 64 MiB 预算可容纳内嵌图表报告；更大的报告需要提高配置上限。浏览器会区分文件缺失、大小超限及预览服务不可用。`previewMaxResources` 限制文档资源与重定向次数。关闭浏览器取消其请求；卸载插件中止并等待 Host 读取结束。
 
 -----
 
@@ -73,6 +80,8 @@ Host 向首页注入凭据模式匹配的 fetch preload。Client 激活时消费
 
 图片引用使用 `[image](file://...)`：开头的感叹号会触发 Codex shell 模式。ANSI 渲染器改编自本地 Kitty Remote Deck 实现，并拒绝可执行 OSC 超链接。
 
+浏览器使用 `shell.overlay` 和不透明来源的 `srcDoc` iframe。父页面向 `/api/dsh/kitty/preview` 发送已认证 JSON 请求，不提供可执行报告路由，也不绕过登录。[读取器](preview.mjs) 签发仅由父页面持有的目录或来源限制，打开 Linux 常规文件后检查文件描述符，并校验每次 HTTP 重定向。[HTML/CSS 处理](preview-html.mjs) 使用 parse5 和 css-tree 内嵌范围内的资源。[设计记录](../../.agents/notes/implemented/feature/2026-09-12-kitty-report-browser.zh.md) 说明传输与隔离选择。
+
 </details>
 
 ## 延伸阅读
@@ -87,7 +96,9 @@ Host 向首页注入凭据模式匹配的 fetch preload。Client 激活时消费
 <a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与后续工作
 
-仅支持本机 Linux Kitty。Kitty 无法原子地比较前台进程并发送输入，进程可能在校验后退出。派发回执不证明模型收件或完成，失败的输入不会自动重试。远端浏览器可能无法打开主机 file URL。本插件没有文件下载服务、SSH 目标、共享 Cordis service 或原生 Agent 工具。获授权的浏览器 Agent 可以操作 UI；原生工具集成需共用 runtime，并添加 Session 目标授权及结果日志。
+仅支持本机 Linux Kitty。Kitty 无法原子地比较前台进程并发送输入，进程可能在校验后退出。派发回执不证明模型收件或完成，失败的输入不会自动重试。本插件没有文件下载服务、SSH 目标、共享 Cordis service 或原生 Agent 工具。获授权的浏览器 Agent 可以操作 UI；原生工具集成需共用 runtime，并添加 Session 目标授权及结果日志。
+
+浏览器预览 HTML、文本、图片及有大小限制的音视频，并非完整网页代理。外部 HTTP(S) CDN 资源由查看设备加载。不支持上游浏览器 Cookie 会话、POST 转发、WebSocket、XHR、JavaScript module import 重写及 PDF 查看。嵌套 frame/object 会被省略，响应式图片使用 `src` 后备资源。脚本直接设置导航地址或动态插入资源 URL 不经过报告桥接。
 
 ## 开发备注
 

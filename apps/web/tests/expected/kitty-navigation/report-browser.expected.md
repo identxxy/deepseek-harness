@@ -1,0 +1,11 @@
+- complementary "Browser":
+  - separator "Resize browser"
+  - strong: Browser
+  - button "Pin browser": ⌖
+  - button "Close browser": ×
+  - button "Back": ←
+  - button "Forward" [disabled]: →
+  - button "Reload": ↻
+  - textbox "Report address": {{reportUrl}}
+  - button "Open"
+  - iframe
