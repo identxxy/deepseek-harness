@@ -27,7 +27,7 @@ English | [中文](README.zh.md)
 
 The sidebar is the navigation shell: users see the brand, start new sessions, collapse the rail, and reach Settings. Feature plugins fill its seats — ui-workspace fills `sidebar.workspaces`, ui-settings registers the trigger row and settings panel at `sidebar.settings`.
 
-Plugins register keyed `sidebar.page` occupants and select them through `ctx.layout.openSidebarPage(key)`. The selected page replaces the browsing region and hides New Session and primary actions; brand and footer remain. The brand returns to the main list without starting a Session, and an unregistered page renders a return-home fallback. Page occupants receive the same `wide` and `expandSidebar` geometry as the Workspace browser.
+Plugins register keyed `sidebar.page` occupants and select them through `ctx.layout.openSidebarPage(key)`. The selected page replaces the browsing region and hides New Session and primary actions; brand and footer remain. The brand returns to the main list without starting a Session, and an unregistered page renders a return-home fallback. Page occupants receive the same `wide` and `expandSidebar` geometry as the Workspace browser. Both contextual pages and primary actions receive the layout-owned `activePaneId`, or null before a pane exists; focus changes update it without replacing the sidebar entry.
 
 ### Brand and New Session
 

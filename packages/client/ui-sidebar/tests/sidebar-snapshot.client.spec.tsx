@@ -70,11 +70,11 @@ describe('sidebar shell snapshots', () => {
             ({ wide }: SidebarSectionOwnerProps) => <div data-wide={wide}>Second browser</div>))
         },
       })
-      const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: 'first' })
+      const slot = runtime.renderSlot('sidebar', { activePaneId: null, collapsed: false, width: 300, sidebarPage: 'first' })
       expect(slot.view.getByText('First browser').dataset.wide).toBe('true')
       expect(slot.view.queryByText('Second browser')).toBeNull()
       expect(slot.view.queryByRole('button', { name: 'New session' })).toBeNull()
-      slot.update({ collapsed: false, width: 300, sidebarPage: 'second' })
+      slot.update({ activePaneId: null, collapsed: false, width: 300, sidebarPage: 'second' })
       expect(slot.view.getByText('Second browser')).toBeTruthy()
       expect(slot.view.queryByText('First browser')).toBeNull()
       await second.dispose()
@@ -87,7 +87,7 @@ describe('sidebar shell snapshots', () => {
 
   it('renders the expanded column in the default locale (zh, no setLocale)', async () => {
     const { runtime } = await bench()
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
+    const slot = runtime.renderSlot('sidebar', { activePaneId: null, collapsed: false, width: 300, sidebarPage: null })
     // Wordmark + capsule both start a session in the expanded state.
     expect(slot.view.getAllByRole('button', { name: '新建会话' })).toHaveLength(2)
     expect(slot.container).toMatchSnapshot()
@@ -96,7 +96,7 @@ describe('sidebar shell snapshots', () => {
 
   it('renders the expanded column (wordmark, capsule, empty holes)', async () => {
     const { runtime } = await bench({ locale: 'en' })
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
+    const slot = runtime.renderSlot('sidebar', { activePaneId: null, collapsed: false, width: 300, sidebarPage: null })
     // Wordmark + capsule both start a session in the expanded state.
     expect(slot.view.getAllByRole('button', { name: 'New session' })).toHaveLength(2)
     expect(slot.container).toMatchSnapshot()
@@ -105,9 +105,9 @@ describe('sidebar shell snapshots', () => {
 
   it('renders the collapsed rail after the crossfade settles, in place', async () => {
     const { runtime } = await bench({ locale: 'en' })
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
+    const slot = runtime.renderSlot('sidebar', { activePaneId: null, collapsed: false, width: 300, sidebarPage: null })
     const shell = slot.container.firstElementChild
-    slot.update({ collapsed: true, width: 56, sidebarPage: null })
+    slot.update({ activePaneId: null, collapsed: true, width: 56, sidebarPage: null })
     // The wide content (wordmark shortcut) unmounts at the 150ms settle;
     // only the rail's capsule remains a New-session button.
     await waitFor(() => {
@@ -121,7 +121,7 @@ describe('sidebar shell snapshots', () => {
 
   it('a locale switch refreshes mounted copy without re-registration', async () => {
     const { runtime, locale } = await bench()
-    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, sidebarPage: null })
+    const slot = runtime.renderSlot('sidebar', { activePaneId: null, collapsed: false, width: 300, sidebarPage: null })
     expect(slot.view.getAllByRole('button', { name: '新建会话' })).toHaveLength(2)
     // Same fiber, same registration: setLocale alone re-renders the outlet.
     act(() => { locale.setLocale('en') })

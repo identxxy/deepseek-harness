@@ -265,19 +265,33 @@
     return `<a class="terminal-link" target="_blank" rel="noopener noreferrer" href="${escapeAttribute(url)}" data-preview-url="${escapeAttribute(url)}"${styleAttribute}>${escapeHtml(label)}</a>`;
   }
 
+  function renderTerminalLine(plain, html) {
+    const rule = /^[ \t]*[-_=─━═╌╍┄┅┈┉][ \t\-_=─━═╌╍┄┅┈┉]*$/.test(plain);
+    const sparkles = /^[ \t\u2800-\u28ff]+$/.test(plain) && /[\u2801-\u28ff]/.test(plain);
+    return rule || sparkles ? `<span class="dsh-kitty-decoration">${html}</span>` : html;
+  }
+
   function renderAnsiTerminalText(text) {
     const value = String(text || "");
     const state = createState();
-    const pattern = /\x1b\]8;[^\x07\x1b;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)|\x1b\[([0-9;:]*)m|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]/g;
+    const pattern = /\x1b\]8;[^\x07\x1b;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)|\x1b\[([0-9;:]*)m|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|(\r?\n)/g;
     let cursor = 0;
     let html = "";
+    let lineHtml = "";
+    let lineText = "";
     let hyperlink = "";
     let match;
 
     while ((match = pattern.exec(value)) !== null) {
-      html += renderTextRun(value.slice(cursor, match.index), styleForState(state), hyperlink);
+      const part = value.slice(cursor, match.index);
+      lineText += part;
+      lineHtml += renderTextRun(part, styleForState(state), hyperlink);
 
-      if (typeof match[1] === "string") {
+      if (match[3]) {
+        html += renderTerminalLine(lineText, lineHtml) + match[3];
+        lineText = "";
+        lineHtml = "";
+      } else if (typeof match[1] === "string") {
         hyperlink = match[1];
       } else if (typeof match[2] === "string") {
         applySgrParams(state, parseSgrParams(match[2]));
@@ -286,7 +300,9 @@
       cursor = match.index + match[0].length;
     }
 
-    html += renderTextRun(value.slice(cursor), styleForState(state), hyperlink);
+    lineText += value.slice(cursor);
+    lineHtml += renderTextRun(value.slice(cursor), styleForState(state), hyperlink);
+    html += renderTerminalLine(lineText, lineHtml);
     return html;
   }
 

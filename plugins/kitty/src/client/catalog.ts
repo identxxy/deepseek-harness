@@ -4,7 +4,12 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
 /** Window metadata and the Host-issued token for its current foreground process. */
 export interface Pane { instance: string; token: string; id: number; title: string; cwd: string; program: string; pid: number }
 /** Authenticated catalog response, including Host-configured Client limits. */
-export interface KittyList { panes: Pane[]; pollIntervalMs: number; maxImageBytes: number }
+export interface KittyList {
+  panes: Pane[];
+  pollIntervalMs: number;
+  maxImageBytes: number;
+  scroll: { debounceMs: number; pixelsPerLine: number; touchSensitivity: number; maxLines: number };
+}
 /** Same-origin route protected by the Host's device and connection checks. */
 export const endpoint = '/api/dsh/kitty';
 

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { computeColumns, MOBILE_NAV_BREAKPOINT } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
 import { readMobileHistoryNavigation, useMobileHistory } from './mobile-history.ts'
@@ -35,7 +36,7 @@ export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsLocale<'layout'>
   & PropsRenderSlots<
-    'sidebar' | 'conversation' | 'details' | 'shell.overlay' | 'workspace.console' | 'workspace.panel' | 'workspace.panel.header'
+    'sidebar' | 'conversation' | 'details' | 'shell.overlay' | 'workspace.console' | 'workspace.panel' | 'workspace.panel.header' | 'workspace.panel.composer'
   >
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & InjectFace<AppFrameInjected>
@@ -55,7 +56,7 @@ function DetailsColumn(props: { children?: ReactNode }) {
 }
 
 function paneIdentity(prefix: 'pane' | 'split'): string {
-  return `${prefix}-${globalThis.crypto.randomUUID()}`
+  return `${prefix}-${randomUUID()}`
 }
 
 interface PaneCanvasProps {
@@ -404,10 +405,9 @@ export function AppFrame({
   const onDetailsDrag = useCallback((dx: number) => {
     actions.setDetails(detailsBase.current - dx)
   }, [actions])
-  const visiblePane = singlePane && panels.paneRoot !== null
-    ? findPane(panels.paneRoot, panels.activePaneId ?? '')
-      ?? findPane(panels.paneRoot, firstPaneId(panels.paneRoot) ?? '')
-    : undefined
+  const focusedPane = findPane(panels.paneRoot, panels.activePaneId ?? '')
+    ?? findPane(panels.paneRoot, firstPaneId(panels.paneRoot) ?? '')
+  const visiblePane = singlePane ? focusedPane : undefined
   const paneTree = visiblePane ?? panels.paneRoot
   const titleOf = (actor: ActorRef): string => actor.kind === 'agent'
     ? sessionsState.byId[actor.id as SessionId]?.displayTitle ?? actor.id
@@ -430,6 +430,7 @@ export function AppFrame({
             the compact rail; single-pane conversation navigation clips the
             mounted sidebar at zero width. */}
         {renderSlot('sidebar', {
+          activePaneId: panels.activePaneId,
           collapsed: sidebarCollapsed,
           width: cols.sidebar,
           sidebarPage,
@@ -441,32 +442,37 @@ export function AppFrame({
             the shell's own pending rendering. The conversation
             is session-maybe; the strict details entry naturally renders
             empty while no session is current. */}
-        <CenterColumn mobileWidth={singlePane ? viewport : undefined}>{paneTree === null
-          ? (
-            <ImplicitAgentPane
-              actions={actions}
-              currentSession={currentSession}
-              mobile={singlePane}
-              renderSlot={renderSlot}
-              title={currentSession === undefined ? undefined : titleOf({ kind: 'agent', id: currentSession })}
-              t={t}
-            />
-          )
-          : (
-            <PaneCanvas
-              node={paneTree}
-              activePaneId={panels.activePaneId}
-              mobile={singlePane}
-              actions={actions}
-              SessionProvider={SessionProvider}
-              canSelectSession={canSelectSession}
-              renderSlot={renderSlot}
-              selectSession={selectPaneSession}
-              stageSession={stageSession}
-              titleOf={titleOf}
-              t={t}
-            />
-          )}</CenterColumn>
+        <CenterColumn mobileWidth={singlePane ? viewport : undefined}>
+          <div className={css.paneCanvas}>{paneTree === null
+            ? (
+              <ImplicitAgentPane
+                actions={actions}
+                currentSession={currentSession}
+                mobile={singlePane}
+                renderSlot={renderSlot}
+                title={currentSession === undefined ? undefined : titleOf({ kind: 'agent', id: currentSession })}
+                t={t}
+              />
+            )
+            : (
+              <PaneCanvas
+                node={paneTree}
+                activePaneId={panels.activePaneId}
+                mobile={singlePane}
+                actions={actions}
+                SessionProvider={SessionProvider}
+                canSelectSession={canSelectSession}
+                renderSlot={renderSlot}
+                selectSession={selectPaneSession}
+                stageSession={stageSession}
+                titleOf={titleOf}
+                t={t}
+              />
+            )}</div>
+          {focusedPane?.actor.kind === 'panel' && renderSlot('workspace.panel.composer', {
+            actor: focusedPane.actor, paneId: focusedPane.id, active: true, mobile: singlePane,
+          }, { entryKey: focusedPane.actor.id })}
+        </CenterColumn>
         <DetailsColumn><SessionProvider>{renderSlot('details', {})}</SessionProvider></DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>

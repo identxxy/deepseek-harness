@@ -8,7 +8,7 @@ function fixture() {
   const pane = () => ({ socket: '/tmp/test', inode: '1', id: 4, created: 1, processes: generation, title: 'Codex', cwd: '/work' });
   const runtime = createRuntime({ discover: async () => [pane()], command: async (_pane, args, stdin) => {
     calls.push({ args, stdin }); await new Promise(resolve => setTimeout(resolve, 2)); return 'screen';
-  }, config: { maxTextBytes: 100, maxImageBytes: 20, imageDirectory: '/unused' } });
+  }, config: { maxTextBytes: 100, maxImageBytes: 20, maxScrollLines: 80, imageDirectory: '/unused' } });
   return { runtime, calls, change: () => { generation = '2'; } };
 }
 test('stale foreground identity cannot receive input', async () => {
@@ -31,6 +31,16 @@ test('rejects malformed and oversized input before invoking Kitty', async () => 
   }
   assert.equal(calls.length, 0);
 });
+test('text without submission preserves the supplied bytes and sends no Enter', async () => {
+  const { runtime, calls } = fixture(); const [pane] = await runtime.list();
+  await runtime.action({ token: pane.token, action: 'text', text: 'y', submit: false });
+  assert.deepEqual(calls, [{ args: ['send-text', '--match', 'id:4', '--stdin', '--bracketed-paste', 'auto'], stdin: 'y' }]);
+});
+test('direction keys send exactly one key each without trailing Enter or text', async () => {
+  const { runtime, calls } = fixture(); const [pane] = await runtime.list();
+  for (const key of ['up', 'down', 'left', 'right']) await runtime.action({ token: pane.token, action: 'key', key });
+  assert.deepEqual(calls, ['up', 'down', 'left', 'right'].map(key => ({ args: ['send-key', '--match', 'id:4', key], stdin: undefined })));
+});
 test('Alt+Up reaches only the selected pane and stale selections send no key', async () => {
   const { runtime, calls, change } = fixture();
   const [pane] = await runtime.list();
@@ -44,6 +54,38 @@ test('no implicit target and no stale reads', async () => {
   const { runtime, change } = fixture(); const [pane] = await runtime.list();
   await assert.rejects(runtime.screen(''), /target/);
   change(); await assert.rejects(runtime.screen(pane.token), /stale/);
+});
+test('scrolling reads the selected viewport after each queued movement and can return to the live screen', async () => {
+  const { runtime, calls } = fixture();
+  const [pane] = await runtime.list();
+  const results = await Promise.all([-8, 3, 'end'].map(amount => runtime.action({ token: pane.token, action: 'scroll', amount })));
+  assert.deepEqual(results, [{ text: 'screen' }, { text: 'screen' }, { text: 'screen' }]);
+  assert.deepEqual(calls.map(call => call.args), [
+    ['scroll-window', '--match', 'id:4', '8-'],
+    ['get-text', '--match', 'id:4', '--extent', 'screen', '--ansi'],
+    ['scroll-window', '--match', 'id:4', '3'],
+    ['get-text', '--match', 'id:4', '--extent', 'screen', '--ansi'],
+    ['scroll-window', '--match', 'id:4', 'end'],
+    ['get-text', '--match', 'id:4', '--extent', 'screen', '--ansi'],
+  ]);
+});
+test('scrolling rejects invalid amounts and stale targets before moving the viewport', async () => {
+  const { runtime, calls, change } = fixture();
+  const [pane] = await runtime.list();
+  for (const amount of [0, 0.5, -81, 81, NaN, Infinity, '8-', 'start', undefined]) {
+    await assert.rejects(runtime.action({ token: pane.token, action: 'scroll', amount }), /invalid_scroll/);
+  }
+  change();
+  await assert.rejects(runtime.action({ token: pane.token, action: 'scroll', amount: -2 }), /stale_target/);
+  assert.equal(calls.length, 0);
+});
+test('a foreground change during scrolling prevents reading the replacement process', async () => {
+  let generation = 1;
+  const calls = [];
+  const runtime = createRuntime({ config: { maxScrollLines: 80 }, discover: async () => [{ socket: 'test', inode: 1, id: 4, created: 1, processes: generation }], command: async (_pane, args) => { calls.push(args[0]); generation++; } });
+  const [pane] = await runtime.list();
+  await assert.rejects(runtime.action({ token: pane.token, action: 'scroll', amount: -2 }), /stale_target/);
+  assert.deepEqual(calls, ['scroll-window']);
 });
 test('process change after paste prevents submitting Enter', async () => {
   let generation = 1; const calls = [];

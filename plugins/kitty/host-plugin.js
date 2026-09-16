@@ -16,7 +16,7 @@ export function createHandler(ctx, runtime, config) {
       if (request.method === 'GET') {
         const url = new URL(request.url, 'http://dsh.invalid');
         const token = url.searchParams.get('token');
-        return reply(200, token === null ? { panes: await runtime.list(), pollIntervalMs: config.pollIntervalMs, maxImageBytes: config.maxImageBytes } : await runtime.screen(token, url.searchParams.get('extent') ?? 'screen'));
+        return reply(200, token === null ? { panes: await runtime.list(), pollIntervalMs: config.pollIntervalMs, maxImageBytes: config.maxImageBytes, scroll: { debounceMs: config.scrollDebounceMs, pixelsPerLine: config.scrollPixelsPerLine, touchSensitivity: config.touchScrollSensitivity, maxLines: config.maxScrollLines } } : await runtime.screen(token, url.searchParams.get('extent') ?? 'screen'));
       }
       if (request.method !== 'POST') return reply(405, { error: 'method_not_allowed' });
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return reply(415, { error: 'json_required' });

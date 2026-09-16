@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write plugins/kitty/README.md
-README.md: 8e16e333b44824f395823dfa82346fd1bd6d207a
-README.zh.md: 0544b373ec993e0beafc484484ed5b6eab43ecb4
+README.md: 2fa1dc4f7845b59537b74c0ccf6db9aa71314449
+README.zh.md: 0c6115fbdcb446a04511335266945afa6da0f756

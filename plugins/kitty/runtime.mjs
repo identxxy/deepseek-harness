@@ -33,6 +33,12 @@ export function createRuntime({ discover, command, config }) {
   async function execute(input) {
     const pane = await resolve(input.token);
     const match = ['--match', `id:${pane.id}`];
+    if (input.action === 'scroll') {
+      const amount = input.amount;
+      if (amount !== 'end' && (!Number.isSafeInteger(amount) || amount === 0 || Math.abs(amount) > config.maxScrollLines)) throw new Error('invalid_scroll');
+      await command(pane, ['scroll-window', ...match, amount === 'end' ? 'end' : `${Math.abs(amount)}${amount < 0 ? '-' : ''}`]);
+      return screen(input.token);
+    }
     if (input.action === 'create') {
       const output = await command(pane, ['launch', '--type', 'os-window', '--source-window', `id:${pane.id}`, '--cwd', pane.cwd, '--keep-focus']);
       const id = Number(output.trim());

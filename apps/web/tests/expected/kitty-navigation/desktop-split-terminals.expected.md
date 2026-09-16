@@ -1,0 +1,38 @@
+- button "Back to Kitty windows":
+  - img
+- text: "#3 · Gamma terminal"
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
+- main: "GAMMA_SCREEN_READY $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
+- button "Back to Kitty windows":
+  - img
+- text: "#2 · Beta terminal"
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
+- main: "BETA_SCREEN_READY $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
+- button "Back to Kitty windows":
+  - img
+- text: "#2 · Beta terminal"
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
+- main: "BETA_SCREEN_READY $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
+- contentinfo:
+  - text: Send to
+  - strong: "#2 · Beta terminal"
+  - textbox "Text for the selected terminal":
+    - /placeholder: Message this terminal…
+  - button "Attach image":
+    - img
+  - button "Terminal keys":
+    - img
+  - button "Paste only" [disabled]
+  - button "Enter ↵"
+  - checkbox "Append newline" [checked]
+  - text: Append newline
+  - button "Send" [disabled]:
+    - text: Send
+    - img
+  - status: Enter adds a line · Ctrl/⌘ Enter sends

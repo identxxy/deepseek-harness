@@ -74,6 +74,7 @@ function mountFrame(options: {
     if (key === 'conversation') return <header data-testid="center-content" />
     if (key === 'details') return <div data-testid="details-content" />
     if (key === 'workspace.console') return <div data-testid="console-content" data-console-id={(owner as { actor: { id: string } }).actor.id} />
+    if (key === 'workspace.panel.composer') return <footer data-testid="plugin-composer" data-pane-id={(owner as { paneId: string }).paneId} />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
@@ -451,7 +452,7 @@ describe('AppFrame', () => {
 
   it('sidebar slot receives live concession output as owner props', () => {
     const { slotCalls } = mountFrame()
-    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ collapsed: false, width: 280, sidebarPage: null })
+    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ activePaneId: null, collapsed: false, width: 280, sidebarPage: null })
   })
 
   it('sidebar drag widens through rAF-batched pointer moves', () => {
@@ -493,7 +494,7 @@ describe('AppFrame', () => {
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
     const lastSidebarCall = slotCalls.filter(c => c.key === 'sidebar').at(-1)!
-    expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED, sidebarPage: null })
+    expect(lastSidebarCall.props).toEqual({ activePaneId: null, collapsed: true, width: SIDEBAR_COLLAPSED, sidebarPage: null })
   })
 
   it('viewport shrink triggers the concession chain via ResizeObserver', () => {
@@ -543,7 +544,7 @@ describe('AppFrame — single-pane mobile navigation', () => {
     expect(frame.dataset.mobileView).toBe('conversation')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
     expect((frame.children[1] as HTMLElement).style.width).toBe('980px')
-    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: 0, sidebarPage: null })
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ activePaneId: null, collapsed: true, width: 0, sidebarPage: null })
     expect(window.history.state).toMatchObject({ __dshMobileView: 'conversation' })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
   })
@@ -556,7 +557,7 @@ describe('AppFrame — single-pane mobile navigation', () => {
     expect(frame.dataset.mobileView).toBe('sessions')
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
     expect((frame.children[1] as HTMLElement).style.width).toBe('980px')
-    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: false, width: 980, sidebarPage: null })
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ activePaneId: null, collapsed: false, width: 980, sidebarPage: null })
     expect(window.history.state).toMatchObject({ __dshMobileView: 'sessions' })
   })
 
@@ -708,4 +709,20 @@ it('opens plugin content in the native canvas without staging an Agent or mounti
   expect(stageSession).not.toHaveBeenCalled()
   expect(frame.queryByTestId('console-content')).toBeNull()
   expect(frame.container.querySelector('[data-actor-kind="panel"]')).not.toBeNull()
+  expect(frame.slotCalls.filter(call => call.key === 'sidebar').at(-1)!.props).toMatchObject({ activePaneId: 'pane-kitty' })
+  expect(frame.getAllByTestId('plugin-composer')).toHaveLength(1)
+  expect(frame.getByTestId('plugin-composer').closest('[data-actor-pane]')).toBeNull()
+  act(() => { frame.instance.actions.splitActor({ kind: 'panel', id: 'Kitty' }, 'horizontal', 'split-kitty', 'pane-second') })
+  expect(frame.slotCalls.filter(call => call.key === 'sidebar').at(-1)!.props).toMatchObject({ activePaneId: 'pane-second' })
+  expect(frame.getAllByTestId('plugin-composer')).toHaveLength(1)
+  expect(frame.getByTestId('plugin-composer').getAttribute('data-pane-id')).toBe('pane-second')
+  act(() => { frame.instance.actions.focusPane('pane-kitty') })
+  expect(frame.slotCalls.filter(call => call.key === 'sidebar').at(-1)!.props).toMatchObject({ activePaneId: 'pane-kitty' })
+  expect(frame.getByTestId('plugin-composer').getAttribute('data-pane-id')).toBe('pane-kitty')
+  act(() => { frame.instance.actions.openActor({ kind: 'console', id: 'console-one' }, 'unused-pane') })
+  expect(frame.queryByTestId('plugin-composer')).toBeNull()
+  act(() => { frame.instance.actions.focusPane('pane-second') })
+  expect(frame.getByTestId('plugin-composer').getAttribute('data-pane-id')).toBe('pane-second')
+  act(() => { frame.instance.actions.closeActorPane('pane-second') })
+  expect(frame.queryByTestId('plugin-composer')).toBeNull()
 })

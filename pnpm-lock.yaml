@@ -2723,6 +2723,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../core/session
+      '@deepseek-ai/dsh-util-crypto':
+        specifier: workspace:^
+        version: link:../../util/crypto
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
@@ -10168,6 +10171,9 @@ importers:
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:^
         version: link:../../packages/subprocess/subprocess
+      '@deepseek-ai/dsh-util-crypto':
+        specifier: workspace:^
+        version: link:../../packages/util/crypto
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31

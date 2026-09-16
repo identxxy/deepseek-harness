@@ -1,0 +1,3 @@
+- main:
+  - text: "ALPHA_SCREEN_READY REMOTE_OFFSET_-10 $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
+  - button "Latest output ↓"

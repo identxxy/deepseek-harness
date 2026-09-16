@@ -1,5 +1,9 @@
 /** Locale-owned Kitty panel labels. */
 export const en = {
+  sendTo: 'Send to',
+  appendNewline: 'Append newline', appendNewlineHint: 'Send Enter after the text',
+  keyUp: 'Up arrow', keyDown: 'Down arrow', keyLeft: 'Left arrow', keyRight: 'Right arrow',
+  scrolling: 'Scrolling terminal…',
   altUp: 'Alt + ↑',
   browserTooLarge: 'This report or its resources exceed the preview size limit.',
   browserNotFound: 'This report or resource was not found on the DSH host.',
@@ -12,6 +16,10 @@ export const en = {
   title: 'Kitty terminal', close: 'Close', refresh: 'Refresh panes', select: 'Select a Kitty window', empty: 'No Kitty panes found', send: 'Send', paste: 'Paste only', image: 'Attach image', prompt: 'Text for the selected terminal', delivered: 'Dispatched · check the terminal for receipt.', pending: 'Sending…', failed: 'Operation failed; check the terminal before retrying.', stale: 'The selected pane or foreground process changed. Select it again.', follow: 'Follow output', history: 'Include scrollback', notice: 'Controls the existing terminal. The model and approvals are managed by its CLI.', loading: 'Loading…', tooLarge: 'Image exceeds the configured size limit.', keys: 'Terminal keys', cancel: 'Cancel', confirm: 'Send this control key to the selected terminal?', keyboard: 'Message this terminal…'
 };
 export const zh: typeof en = {
+  sendTo: '发送到',
+  appendNewline: '末尾换行', appendNewlineHint: '发送文本后补一次 Enter',
+  keyUp: '向上键', keyDown: '向下键', keyLeft: '向左键', keyRight: '向右键',
+  scrolling: '正在滚动终端…',
   altUp: 'Alt + ↑',
   browserTooLarge: '此报告或其中的资源超过预览大小上限。',
   browserNotFound: 'DSH 主机上找不到此报告或资源。',

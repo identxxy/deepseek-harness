@@ -29,7 +29,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Optional primary actions rendered directly below New Session. */
     'sidebar.primary.action': { kind: 'list'; scope: 'root'; owner: SidebarPrimaryActionOwnerProps }
     /** Plugin-owned contextual browser, selected by ctx.layout.openSidebarPage(). */
-    'sidebar.page': { kind: 'keyed'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    'sidebar.page': { kind: 'keyed'; scope: 'root'; owner: SidebarPageOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
@@ -74,6 +74,12 @@ export interface SidebarSectionOwnerProps {
   expandSidebar: () => void
 }
 
+/** Contextual browser geometry and the canvas pane targeted by its selections. */
+export interface SidebarPageOwnerProps extends SidebarSectionOwnerProps {
+  /** Focused canvas pane, or null before a pane exists. */
+  activePaneId: string | null
+}
+
 /**
  * Owner share of the sidebar settings seat: the column display state the
  * occupant's trigger row must render against (wide row vs rail icon).
@@ -85,6 +91,8 @@ export interface SidebarSettingsOwnerProps {
 
 /** Owner share of a primary action rendered below New Session. */
 export interface SidebarPrimaryActionOwnerProps {
+  /** Focused canvas pane targeted by the action, or null before a pane exists. */
+  activePaneId: string | null
   /** Whether the sidebar renders wide content (false = 56px rail). */
   wide: boolean
 }

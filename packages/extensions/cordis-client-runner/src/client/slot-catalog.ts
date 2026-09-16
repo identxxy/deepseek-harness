@@ -1895,7 +1895,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'The whole left column. OCCUPIED by ui-sidebar\'s SidebarRoot, which\ndeclares the workspace and settings seats inside it — registering here\nreplaces the navigation column outright rather than adding to it, and\nthe seats it declares disappear with it. To add something to the\nsidebar, register into one of those inner seats instead.\n\nThe occupant receives the frame\'s live column state (collapsed, width)\nand is expected to render the compact control rail while collapsed.',
     registerOptions: [],
     ownerProps: [
-      '/** Sidebar owner share: live column state from the frame\'s concession solve. */\nexport interface SidebarOwnerProps {\n  /** Active contextual sidebar page, or null for the main Session list. */\n  sidebarPage: string | null\n  /** True when the sidebar is closed (the column renders the compact control rail). */\n  collapsed: boolean\n  /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */\n  width: number\n}',
+      '/** Sidebar owner share: live column state from the frame\'s concession solve. */\nexport interface SidebarOwnerProps {\n  /** Focused canvas pane, or null before a pane exists. */\n  activePaneId: string | null\n  /** Active contextual sidebar page, or null for the main Session list. */\n  sidebarPage: string | null\n  /** True when the sidebar is closed (the column renders the compact control rail). */\n  collapsed: boolean\n  /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */\n  width: number\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -2033,9 +2033,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/**\n * Owner share of the browser hole — the only facts crossing the shell/region\n * boundary. Business data and actions arrive through the region\'s own inject.\n */\nexport interface SidebarSectionOwnerProps {\n  /** Shell fold-state output: wide renders the full browser, rail the icon column. */\n  wide: boolean\n  /** Rail icons request expansion; the browser rides the wide flip for focus. */\n  expandSidebar: () => void\n}',
+      '/** Contextual browser geometry and the canvas pane targeted by its selections. */\nexport interface SidebarPageOwnerProps extends SidebarSectionOwnerProps {\n  /** Focused canvas pane, or null before a pane exists. */\n  activePaneId: string | null\n}',
     ],
-    ownerPropsReferences: [],
+    ownerPropsReferences: [
+      'SidebarSectionOwnerProps',
+    ],
     standardProps: [
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'useSessions: UseSessions',
@@ -2078,7 +2080,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Owner share of a primary action rendered below New Session. */\nexport interface SidebarPrimaryActionOwnerProps {\n  /** Whether the sidebar renders wide content (false = 56px rail). */\n  wide: boolean\n}',
+      '/** Owner share of a primary action rendered below New Session. */\nexport interface SidebarPrimaryActionOwnerProps {\n  /** Focused canvas pane targeted by the action, or null before a pane exists. */\n  activePaneId: string | null\n  /** Whether the sidebar renders wide content (false = 56px rail). */\n  wide: boolean\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -2405,7 +2407,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'workspace.console\', () => ctx.slots.register(\n      { name: \'workspace.console\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-layout/src/client/index.ts:106',
+    source: 'packages/client/ui-layout/src/client/index.ts:108',
   },
   {
     key: 'workspace.panel',
@@ -2435,6 +2437,42 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'workspace.panel\', () => ctx.slots.register(\n      { name: \'workspace.panel\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/ui-layout/src/client/index.ts:102',
+  },
+  {
+    key: 'workspace.panel.composer',
+    kind: 'keyed',
+    scope: 'root',
+    summary: 'One composer below the canvas, addressed to the focused plugin pane.',
+    doc: 'One composer below the canvas, addressed to the focused plugin pane.',
+    registerOptions: [
+      {
+        name: 'key',
+        requirement: 'required',
+        type: 'string',
+        doc: 'Your cell key: the entry renders where the owner dispatches this exact key. Registering an already-occupied key replaces that occupant.',
+      },
+    ],
+    ownerProps: [
+      '/** Owner share supplied to one plugin content pane. */\nexport interface PluginPaneOwnerProps {\n  /** Plugin-owned address; independent of Agent and Console catalogs. */\n  actor: Extract<ActorRef, { kind: \'panel\' }>\n  /** Device-local pane identity. */\n  paneId: string\n  /** Whether the pane is focused. */\n  active: boolean\n  /** Whether the mobile canvas shows only the focused pane. */\n  mobile: boolean\n}',
+    ],
+    ownerPropsReferences: [
+      'ActorRef',
+      'Agent',
+    ],
+    standardProps: [
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+      'useSessions: UseSessions',
+      'useSessionPendingInteraction: UseSessionPendingInteraction',
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+    ],
+    keyDomain: 'open: any string the owner dispatches (no compile-time key set), none are taken yet',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
+    occupants: [],
+    replaceRisk: 'none',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'workspace.panel.composer\', () => ctx.slots.register(\n      { name: \'workspace.panel.composer\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-layout/src/client/index.ts:106',
   },
   {
     key: 'workspace.panel.header',

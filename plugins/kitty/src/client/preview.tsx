@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties } from 'react';
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives';
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto';
 import { endpoint, request } from './catalog.ts';
 import { previewDocument } from './preview-bridge.ts';
 import type { createKittyStore } from './stores.ts';
@@ -35,7 +36,7 @@ function reportUrl(value: unknown, base?: string): string | undefined {
  * @returns the drawer or its reopen control.
  */
 export function KittyPreview({ useStore, actions, t }: PreviewProps) {
-  const { previewOpen: open, previewUrl, previewRequest, previewWidth: width, previewPinned: pinned, selected } = useStore(s => s);
+  const { previewOpen: open, previewUrl, previewRequest, previewWidth: width, previewPinned: pinned, panes } = useStore(s => s);
   const [pages, setPages] = useState<Pick<Page, 'url' | 'scope'>[]>([]);
   const [page, setPage] = useState<Page>();
   const [position, setPosition] = useState(-1);
@@ -46,13 +47,13 @@ export function KittyPreview({ useStore, actions, t }: PreviewProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const drawer = useRef<HTMLElement>(null);
   const navigation = useRef<AbortController | null>(null);
-  const historyId = useRef(crypto.randomUUID());
+  const historyId = useRef(randomUUID());
   const wasOpen = useRef(false);
   const lastRequest = useRef(0);
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const current = useRef({ page, position });
   current.current = { page, position };
-  const channel = useMemo(() => crypto.randomUUID(), [page, open]);
+  const channel = useMemo(() => randomUUID(), [page, open]);
   const srcDoc = useMemo(() => page ? previewDocument(page.html, channel, page.url) : undefined, [page, channel]);
   const close = useCallback(() => { actions.closePreview(); }, [actions]);
   const load = useCallback(async (value: string, scope?: string, mode: 'root' | 'push' | 'replace' | 'history' = 'root', historyIndex?: number) => {
@@ -173,7 +174,7 @@ export function KittyPreview({ useStore, actions, t }: PreviewProps) {
     const entry = pages[next]!;
     void load(entry.url, entry.scope, 'history', next);
   };
-  if (!selected && !previewUrl && !page && !open) return null;
+  if (!Object.values(panes).some(pane => pane.selected) && !previewUrl && !page && !open) return null;
   return <>
     {!open && <Button className="dsh-kitty-browser-handle" aria-label={t('browser')} title={t('browser')} onClick={() => actions.showPreview()}>
       <svg className="dsh-kitty-browser-handle-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">

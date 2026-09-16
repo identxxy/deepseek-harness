@@ -102,6 +102,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'workspace.panel': { kind: 'single'; scope: 'root'; owner: PluginPaneOwnerProps }
     /** Plugin-owned pane title and navigation beside layout-owned pane controls. */
     'workspace.panel.header': { kind: 'keyed'; scope: 'root'; owner: PluginPaneOwnerProps }
+    /** One composer below the canvas, addressed to the focused plugin pane. */
+    'workspace.panel.composer': { kind: 'keyed'; scope: 'root'; owner: PluginPaneOwnerProps }
     /** Human Terminal body rendered for each Console pane occurrence. */
     'workspace.console': { kind: 'single'; scope: 'root'; owner: ConsolePaneOwnerProps }
   }
@@ -115,6 +117,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Sidebar owner share: live column state from the frame's concession solve. */
 export interface SidebarOwnerProps {
+  /** Focused canvas pane, or null before a pane exists. */
+  activePaneId: string | null
   /** Active contextual sidebar page, or null for the main Session list. */
   sidebarPage: string | null
   /** True when the sidebar is closed (the column renders the compact control rail). */
@@ -178,6 +182,7 @@ export function apply(ctx: ClientContext): void {
         'workspace.console': { kind: 'single', scope: 'root' },
         'workspace.panel': { kind: 'single', scope: 'root' },
         'workspace.panel.header': { kind: 'keyed', scope: 'root' },
+        'workspace.panel.composer': { kind: 'keyed', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
       // entry and delivers useStore/actions to AppFrame as standard props.

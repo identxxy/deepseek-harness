@@ -9,6 +9,7 @@
  * registration's bound actions.
  */
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type { ActorRef, PaneSplitDirection } from './panes.ts'
 import type { createLayoutStore } from './stores.ts'
 
@@ -59,7 +60,7 @@ export interface ILayout {
 }
 
 function layoutId(prefix: 'pane' | 'split'): string {
-  return `${prefix}-${globalThis.crypto.randomUUID()}`
+  return `${prefix}-${randomUUID()}`
 }
 
 /** Cross-plugin viewing-action face (ctx.layout). */

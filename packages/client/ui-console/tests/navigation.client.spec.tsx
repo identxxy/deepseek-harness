@@ -75,6 +75,7 @@ describe('Console navigation', () => {
   it('creates in the current Session Workspace before using the recent fallback', () => {
     const injected = navigation()
     render(<NewTerminalAction
+      activePaneId={null}
       wide
       useSessionPendingInteraction={hook(new Map()) as never}
       useSessions={hook({ current: sid('s-alpha'), byId: {} }) as never}
@@ -120,6 +121,7 @@ describe('Console navigation', () => {
     const injected = navigation()
     const base = {
       wide: false,
+      activePaneId: null,
       useSessionPendingInteraction: hook(new Map()) as never,
       useSessions: hook({ current: undefined, byId: {} }) as never,
       ...injected,
@@ -144,6 +146,7 @@ describe('Console navigation', () => {
     injected.createAndOpen = vi.fn(() => pending)
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     render(<NewTerminalAction
+      activePaneId={null}
       wide
       useSessionPendingInteraction={hook(new Map()) as never}
       useSessions={hook({ current: undefined, byId: {} }) as never}

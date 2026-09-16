@@ -27,7 +27,7 @@ kind: "package-reference"
 
 侧边栏是导航外壳：用户看到品牌、启动新会话、折叠轨道并到达 Settings。功能插件填充它的席位——ui-workspace 填充 `sidebar.workspaces`，ui-settings 在 `sidebar.settings` 注册触发行与设置面板。
 
-插件注册 keyed `sidebar.page` 内容，并通过 `ctx.layout.openSidebarPage(key)` 选中页面。该页面替换浏览区并隐藏新建会话及主操作；品牌与页脚保留。品牌按钮返回主列表而不创建 Session，未注册的页面显示返回主页的回退控件。页面内容与 Workspace 浏览器接收相同的 `wide` 和 `expandSidebar` 几何信息。
+插件注册 keyed `sidebar.page` 内容，并通过 `ctx.layout.openSidebarPage(key)` 选中页面。该页面替换浏览区并隐藏新建会话及主操作；品牌与页脚保留。品牌按钮返回主列表而不创建 Session，未注册的页面显示返回主页的回退控件。页面内容与 Workspace 浏览器接收相同的 `wide` 和 `expandSidebar` 几何信息。上下文页面与主操作都接收布局持有的 `activePaneId`，尚无窗格时为 null；焦点变化会更新该值而不替换侧栏条目。
 
 ### 品牌与 New Session
 

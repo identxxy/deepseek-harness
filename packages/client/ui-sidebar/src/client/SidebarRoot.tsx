@@ -50,6 +50,7 @@ function localBuildVersion(): string | undefined {
  * @returns the sidebar element tree.
  */
 export function SidebarRoot({
+  activePaneId,
   collapsed,
   width,
   sidebarPage,
@@ -201,7 +202,7 @@ export function SidebarRoot({
         </button>
       </Tooltip>}
 
-      {sidebarPage === null && renderSlot('sidebar.primary.action', { wide })}
+      {sidebarPage === null && renderSlot('sidebar.primary.action', { wide, activePaneId })}
 
       {/* The browsing region fills the column between the controls and the
           foot in both states; its rail icon column rides the same slot. */}
@@ -212,6 +213,7 @@ export function SidebarRoot({
             expandSidebar: () => { if (collapsed) toggleSidebar() },
           })
           : renderSlot('sidebar.page', {
+            activePaneId,
             wide,
             expandSidebar: () => { if (collapsed) toggleSidebar() },
           }, {

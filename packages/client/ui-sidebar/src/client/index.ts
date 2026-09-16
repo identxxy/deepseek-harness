@@ -12,7 +12,7 @@ import { en, zh, type SidebarKey } from './locales.ts'
 
 export type {
   SidebarBrandMarkOwnerProps, SidebarBrandNameOwnerProps, SidebarFooterActionOwnerProps,
-  SidebarPrimaryActionOwnerProps, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
+  SidebarPageOwnerProps, SidebarPrimaryActionOwnerProps, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
   SidebarSettingsOwnerProps,
 } from './contract/slots.ts'
 export type { SidebarKey } from './locales.ts'

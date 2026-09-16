@@ -21,6 +21,7 @@ const PANES = [
   { instance: 'fixture-kitty', token: 'alpha-token', id: 1, title: 'Alpha terminal', cwd: '/workspace/alpha', program: 'zsh', pid: 101 },
   { instance: 'fixture-kitty', token: 'beta-token', id: 2, title: 'Beta terminal', cwd: '/workspace/beta', program: 'python', pid: 102 },
 ]
+const SCROLL_OPTIONS = { debounceMs: 70, pixelsPerLine: 40, touchSensitivity: 2, maxLines: 8 }
 const SCREEN_SAMPLE = [
   '$ pwd',
   '/workspace/example',
@@ -42,6 +43,18 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
   let mutations: string[]
   let allowCreate = false
   let allowAltUp = false
+  let allowComposer = false
+  let composerInputs: Record<string, unknown>[]
+  let composerStale = false
+  let composerBarrier: Promise<void> | undefined
+  let releaseComposer: (() => void) | undefined
+  const pendingComposerResponses = new Set<Promise<void>>()
+  let allowScroll = false
+  let scrollAmounts: (number | 'end')[]
+  let scrollOffset = 0
+  let scrollBarrier: Promise<void> | undefined
+  let releaseScroll: (() => void) | undefined
+  const pendingScrollResponses = new Set<Promise<void>>()
   let catalogReads = 0
   let screenExtra = ''
   let reportUrl: string
@@ -105,18 +118,58 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     mutations = []
     allowCreate = false
     allowAltUp = false
+    allowComposer = false
+    composerInputs = []
+    composerStale = false
+    composerBarrier = undefined
+    releaseComposer = undefined
+    allowScroll = false
+    scrollAmounts = []
+    scrollOffset = 0
+    scrollBarrier = undefined
+    releaseScroll = undefined
     catalogReads = 0
     screenExtra = ''
     catalogBarrier = undefined
     releaseCatalog = undefined
     page = await newEnglishPage(browser)
+    await page.addInitScript(() => {
+      Object.defineProperty(Crypto.prototype, 'randomUUID', { value: undefined, configurable: true })
+    })
     tripwire = watchConsole(page)
     page.setDefaultTimeout(15_000)
     await page.route(url => url.pathname === '/api/dsh/kitty', async (route) => {
       const request = route.request()
       if (request.method() !== 'GET') {
         mutations.push(request.method())
-        const input = request.postDataJSON() as { token?: string; action?: string; key?: string }
+        const input = request.postDataJSON() as { token?: string; action?: string; key?: string; amount?: number | 'end' }
+        if (allowComposer && request.method() === 'POST' && panes.some(pane => pane.token === input.token)
+          && (input.action === 'text' || (input.action === 'key' && ['up', 'down', 'left', 'right'].includes(input.key ?? '')))) {
+          composerInputs.push(input)
+          const response = (async () => {
+            await composerBarrier
+            await route.fulfill(composerStale
+              ? { status: 409, json: { error: 'stale_target' } }
+              : { json: { delivered: true } })
+          })()
+          pendingComposerResponses.add(response)
+          try { await response }
+          finally { pendingComposerResponses.delete(response) }
+          return
+        }
+        if (allowScroll && request.method() === 'POST' && input.token === 'alpha-token' && input.action === 'scroll' && input.amount !== undefined) {
+          scrollAmounts.push(input.amount)
+          scrollOffset = input.amount === 'end' ? 0 : scrollOffset + input.amount
+          const text = `ALPHA_SCREEN_READY\nREMOTE_OFFSET_${scrollOffset}\n${SCREEN_SAMPLE}${screenExtra}`
+          const response = (async () => {
+            await scrollBarrier
+            await route.fulfill({ json: { text } })
+          })()
+          pendingScrollResponses.add(response)
+          try { await response }
+          finally { pendingScrollResponses.delete(response) }
+          return
+        }
         if (allowAltUp && request.method() === 'POST' && input.token === 'alpha-token' && input.action === 'key' && input.key === 'alt+up') {
           await route.fulfill({ json: { delivered: true } })
           return
@@ -142,7 +195,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
         await catalogBarrier
         await route.fulfill(listError
           ? { status: 500, json: { error: 'kitty_operation_failed' } }
-          : { json: { panes, pollIntervalMs: 60_000, maxImageBytes: 8 * 1024 * 1024 } })
+          : { json: { panes, pollIntervalMs: 60_000, maxImageBytes: 8 * 1024 * 1024, scroll: SCROLL_OPTIONS } })
       })()
       pendingCatalogResponses.add(response)
       try { await response }
@@ -154,7 +207,11 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
 
   afterEach(async ({ task }) => {
     releaseCatalog?.()
+    releaseScroll?.()
+    releaseComposer?.()
     await Promise.all([...pendingCatalogResponses])
+    await Promise.all([...pendingScrollResponses])
+    await Promise.all([...pendingComposerResponses])
     try {
       if (task.result?.state === 'fail' && page !== undefined && !page.isClosed()) {
         await mkdir(ARTIFACTS, { recursive: true })
@@ -162,7 +219,9 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
         await writeFile(join(ARTIFACTS, 'failure-aria.md'), await page.locator('body').ariaSnapshot())
       }
       expect(tripwire).toEqual({ warnings: [], pageErrors: [] })
-      expect(mutations).toEqual(allowCreate || allowAltUp ? ['POST'] : [])
+      expect(mutations).toEqual([
+        ...(allowCreate || allowAltUp ? ['POST'] : []), ...scrollAmounts.map(() => 'POST'), ...composerInputs.map(() => 'POST'),
+      ])
     } finally {
       await page?.close()
     }
@@ -351,6 +410,71 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await page.getByRole('button', { name: 'Kitty terminal', exact: true }).waitFor()
   })
 
+  it('keeps the newline checkbox beside Send and opens direction keys from the mobile key panel', async () => {
+    allowComposer = true
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWindows()
+    await showScreen('Alpha')
+    const newline = page.getByRole('checkbox', { name: 'Append newline', exact: true })
+    expect(await newline.count()).toBe(1)
+    expect(await newline.isChecked()).toBe(true)
+    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+    expect(await page.getByRole('button', { name: 'Up arrow', exact: true }).count()).toBe(0)
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      await expect.poll(async () => {
+        const bounds = await send.boundingBox()
+        return bounds!.x + bounds!.width
+      }).toBeLessThanOrEqual(width)
+      const labelBounds = await page.locator('.dsh-kitty-newline').boundingBox()
+      const sendBounds = await send.boundingBox()
+      expect(labelBounds!.x).toBeGreaterThanOrEqual(0)
+      expect(sendBounds!.x + sendBounds!.width).toBeLessThanOrEqual(width)
+      expect(Math.abs(labelBounds!.y - sendBounds!.y)).toBeLessThanOrEqual(4)
+      expect(sendBounds!.x - labelBounds!.x - labelBounds!.width).toBeLessThanOrEqual(8)
+    }
+    await draft.fill('First message')
+    await send.click()
+    await expect.poll(() => draft.inputValue()).toBe('')
+    await newline.uncheck()
+    await draft.fill('y')
+    await send.click()
+    await expect.poll(() => draft.inputValue()).toBe('')
+    await draft.fill('Keyboard send')
+    await draft.press('Control+Enter')
+    await expect.poll(() => draft.inputValue()).toBe('')
+    expect(composerInputs).toEqual([
+      { token: 'alpha-token', action: 'text', text: 'First message', submit: true },
+      { token: 'alpha-token', action: 'text', text: 'y', submit: false },
+      { token: 'alpha-token', action: 'text', text: 'Keyboard send', submit: false },
+    ])
+    await newline.check()
+    await draft.fill('Keep this draft')
+    const keys = page.getByRole('button', { name: 'Terminal keys', exact: true })
+    await keys.click()
+    const keyboard = page.locator('.dsh-kitty-keyboard')
+    for (const direction of ['Up', 'Down', 'Left', 'Right']) {
+      const button = keyboard.getByRole('button', { name: `${direction} arrow`, exact: true })
+      const bounds = await button.boundingBox()
+      expect(bounds!.x).toBeGreaterThanOrEqual(0)
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390)
+      await button.click()
+      await expect.poll(() => button.isEnabled()).toBe(true)
+    }
+    expect(composerInputs.slice(3)).toEqual(['up', 'down', 'left', 'right'].map(key => ({ token: 'alpha-token', action: 'key', key })))
+    expect(await draft.inputValue()).toBe('Keep this draft')
+    await keys.click()
+    expect(await page.getByRole('button', { name: 'Up arrow', exact: true }).count()).toBe(0)
+    await newline.uncheck()
+    await compareOrRefreshGolden(join(EXPECTED, 'mobile-send-options.expected.md'),
+      await captureStableAria(page, '.dsh-kitty-send-options', scaffold.workspaceCwd), MODE)
+    if (MODE === 'refresh') await page.screenshot({ path: join(ARTIFACTS, 'mobile-send-options.png') })
+    await page.getByRole('button', { name: 'Back to Kitty windows', exact: true }).click()
+    await showScreen('Beta')
+    expect(await newline.isChecked()).toBe(false)
+  })
+
   it('keeps Alt+Up visible at the start of mobile keys and preserves the draft after dispatch', async () => {
     allowAltUp = true
     await page.setViewportSize({ width: 390, height: 844 })
@@ -399,6 +523,366 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await compareOrRefreshGolden(join(EXPECTED, 'report-unavailable.expected.md'),
       await captureStableAria(page, '.dsh-kitty-preview-status', scaffold.workspaceCwd), MODE)
     expect(await report.getByRole('heading', { name: 'Large local report', exact: true }).isVisible()).toBe(true)
+  })
+
+  it('shares one composer across Kitty splits while retaining each pane draft, image and send preference', async () => {
+    allowComposer = true
+    panes = [...PANES, {
+      instance: 'fixture-kitty', token: 'gamma-token', id: 3, title: 'Gamma terminal', cwd: '/workspace/gamma', program: 'zsh', pid: 103,
+    }]
+    await page.setViewportSize({ width: 1680, height: 1050 })
+    await openWindows()
+    await showScreen('Alpha')
+    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const newline = page.getByRole('checkbox', { name: 'Append newline', exact: true })
+    await draft.fill('Keep Alpha draft')
+    await newline.uncheck()
+    await page.locator('.dsh-kitty-file').setInputFiles({
+      name: 'alpha.png', mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA1sAAAAASUVORK5CYII=', 'base64'),
+    })
+    await page.getByRole('img', { name: 'alpha.png', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Split right', exact: true }).click()
+    const splits = page.locator('[data-actor-kind="panel"]')
+    await expect.poll(() => splits.count()).toBe(2)
+    const left = splits.nth(0)
+    const right = splits.nth(1)
+    await right.locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+    expect(await draft.count()).toBe(1)
+    expect(await splits.getByRole('textbox').count()).toBe(0)
+    expect(await newline.isChecked()).toBe(true)
+    expect(await draft.inputValue()).toBe('')
+    expect(await page.getByRole('img', { name: 'alpha.png', exact: true }).count()).toBe(0)
+    await draft.fill('Replace this draft')
+    await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
+    await right.locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    expect(await left.locator('.dsh-kitty-pane-title').textContent()).toBe('#1 · Alpha terminal')
+    expect(await left.locator('.dsh-kitty-screen').textContent()).toContain('ALPHA_SCREEN_READY')
+    expect(await draft.inputValue()).toBe('')
+    await draft.fill('Keep Beta draft')
+    const sharedInput = await draft.elementHandle()
+    await left.locator('.dsh-kitty-pane-title').click()
+    await expect.poll(() => page.getByRole('button', { name: '#1 · Alpha terminal', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await sharedInput!.evaluate(element => element === document.querySelector('.dsh-kitty-compose textarea'))).toBe(true)
+    expect(await draft.inputValue()).toBe('Keep Alpha draft')
+    expect(await newline.isChecked()).toBe(false)
+    await page.getByRole('img', { name: 'alpha.png', exact: true }).waitFor()
+    await page.getByRole('button', { name: '#3 · Gamma terminal', exact: true }).click()
+    await left.locator('.dsh-kitty-screen').filter({ hasText: 'GAMMA_SCREEN_READY' }).waitFor()
+    expect(await draft.inputValue()).toBe('')
+    expect(await newline.isChecked()).toBe(false)
+    expect(await right.locator('.dsh-kitty-pane-title').textContent()).toBe('#2 · Beta terminal')
+    expect(await right.locator('.dsh-kitty-screen').textContent()).toContain('BETA_SCREEN_READY')
+    await right.locator('.dsh-kitty-pane-title').click()
+    expect(await draft.inputValue()).toBe('Keep Beta draft')
+    expect(await newline.isChecked()).toBe(true)
+    expect(await page.locator('.dsh-kitty-composer-target').textContent()).toBe('Send to#2 · Beta terminal')
+    await right.getByRole('button', { name: 'Split down', exact: true }).click()
+    await expect.poll(() => page.locator('.dsh-kitty-pane-title').allTextContents())
+      .toEqual(['#3 · Gamma terminal', '#2 · Beta terminal', '#2 · Beta terminal'])
+    expect(await draft.count()).toBe(1)
+    expect(await draft.inputValue()).toBe('')
+    const canvasBounds = await page.locator('[class*="paneCanvas"]').boundingBox()
+    const composerBounds = await page.locator('.dsh-kitty-compose').boundingBox()
+    expect(composerBounds!.y).toBeGreaterThanOrEqual(canvasBounds!.y + canvasBounds!.height - 1)
+    expect(composerBounds!.width).toBeCloseTo(canvasBounds!.width, 0)
+    expect(await page.locator('.dsh-kitty-compose').evaluate(element => parseFloat(getComputedStyle(element).paddingLeft))).toBeGreaterThan(0)
+    await compareOrRefreshGolden(join(EXPECTED, 'desktop-split-terminals.expected.md'),
+      await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+    if (MODE === 'refresh') await page.screenshot({ path: join(ARTIFACTS, 'desktop-split-terminals.png') })
+    await splits.nth(2).getByRole('button', { name: 'Close pane', exact: true }).click()
+    await right.locator('.dsh-kitty-pane-title').click()
+    expect(await draft.inputValue()).toBe('Keep Beta draft')
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect.poll(() => draft.inputValue()).toBe('')
+    await left.locator('.dsh-kitty-pane-title').click()
+    await draft.fill('Gamma without Enter')
+    await draft.press('Control+Enter')
+    await expect.poll(() => draft.inputValue()).toBe('')
+    expect(composerInputs).toEqual([
+      { token: 'beta-token', action: 'text', text: 'Keep Beta draft', submit: true },
+      { token: 'gamma-token', action: 'text', text: 'Gamma without Enter', submit: false },
+    ])
+  })
+
+  it('settles a pending send in its original split while the shared composer edits another pane', async () => {
+    allowComposer = true
+    composerBarrier = new Promise<void>((resolve) => { releaseComposer = resolve })
+    await openWindows()
+    await showScreen('Alpha')
+    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    await draft.fill('Send Alpha once')
+    const image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA1sAAAAASUVORK5CYII='
+    await page.locator('.dsh-kitty-compose').evaluate((element, data) => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([Uint8Array.from(atob(data), char => char.charCodeAt(0))], 'sent.png', { type: 'image/png' }))
+      element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }))
+    }, image)
+    await page.getByRole('img', { name: 'sent.png', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect.poll(() => composerInputs.length).toBe(1)
+    await page.getByRole('button', { name: 'Split right', exact: true }).click()
+    const splits = page.locator('[data-actor-kind="panel"]')
+    await expect.poll(() => splits.count()).toBe(2)
+    await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
+    await draft.fill('Keep Beta while Alpha sends')
+    expect(await draft.isEnabled()).toBe(true)
+    const receipt = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/dsh/kitty')
+    releaseComposer?.()
+    await (await receipt).finished()
+    await splits.nth(0).locator('.dsh-kitty-pane-title').click()
+    await expect.poll(() => draft.inputValue()).toBe('')
+    expect(await draft.isEnabled()).toBe(true)
+    await splits.nth(1).locator('.dsh-kitty-pane-title').click()
+    expect(await draft.inputValue()).toBe('Keep Beta while Alpha sends')
+    expect(composerInputs).toEqual([{ token: 'alpha-token', action: 'text', text: 'Send Alpha once', submit: true, image: { mime: 'image/png', data: image } }])
+  })
+
+  it.each([false, true])('preserves a replacement draft when an older send completes with stale=%s', async (stale) => {
+    allowComposer = true
+    composerStale = stale
+    composerBarrier = new Promise<void>((resolve) => { releaseComposer = resolve })
+    await openWindows()
+    await showScreen('Alpha')
+    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    await draft.fill('Old Alpha submission')
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect.poll(() => composerInputs.length).toBe(1)
+    await showScreen('Beta')
+    await showScreen('Alpha')
+    await draft.fill('New Alpha draft')
+    const receipt = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/dsh/kitty')
+    releaseComposer?.()
+    await (await receipt).finished()
+    await page.getByRole('button', { name: 'Terminal keys', exact: true }).click()
+    expect(await draft.inputValue()).toBe('New Alpha draft')
+    expect(await draft.isEnabled()).toBe(true)
+    expect(composerInputs).toEqual([{ token: 'alpha-token', action: 'text', text: 'Old Alpha submission', submit: true }])
+  })
+
+  it('clears a stale background Kitty pane without changing the focused terminal or its draft', async () => {
+    await openWindows()
+    await showScreen('Alpha')
+    await page.getByRole('button', { name: 'Split right', exact: true }).click()
+    const splits = page.locator('[data-actor-kind="panel"]')
+    await expect.poll(() => splits.count()).toBe(2)
+    const left = splits.nth(0)
+    const right = splits.nth(1)
+    await left.locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+    await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
+    await right.locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    await draft.fill('Keep the focused terminal draft')
+    staleToken = 'alpha-token'
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+    await left.getByRole('heading', { name: 'Select a Kitty window', exact: true }).waitFor()
+    expect(await right.locator('.dsh-kitty-screen').textContent()).toContain('BETA_SCREEN_READY')
+    expect(await draft.inputValue()).toBe('Keep the focused terminal draft')
+    expect(await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await right.getAttribute('data-active')).toBe('true')
+  })
+
+  it('keeps separator and sparkle rows to one line as the viewport and animation change', async () => {
+    const rule = '─'.repeat(180)
+    const body = 'Ordinary terminal text still wraps. '.repeat(6)
+    const screen = (stars: string) => `\n\x1b[90m${rule}\x1b[0m\n\x1b[31mAFTER_RULE\x1b[0m\n${stars}\n\x1b[32mAFTER_STARS\x1b[0m\n\x1b[34m${body}\x1b[0m`
+    screenExtra = screen('    ⠈              ⢀    ⠐⠂    ⠄   '.repeat(6))
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWindows()
+    await showScreen('Alpha')
+    const output = page.locator('.dsh-kitty-screen')
+    const decorations = output.locator('.dsh-kitty-decoration')
+    await expect.poll(() => decorations.count()).toBe(2)
+    const geometry = async () => output.evaluate((element) => {
+      const lineHeight = parseFloat(getComputedStyle(element).lineHeight)
+      const rows = [...element.querySelectorAll<HTMLElement>('.dsh-kitty-decoration')]
+      const after = [...element.querySelectorAll('span')].find(span => span.textContent === 'AFTER_STARS')!
+      return {
+        lineHeight, heights: rows.map(row => row.getBoundingClientRect().height),
+        clipped: rows.every(row => row.scrollWidth > row.clientWidth),
+        followingOffset: after.getBoundingClientRect().top - rows[1]!.getBoundingClientRect().top,
+        overflow: element.scrollWidth > element.clientWidth,
+      }
+    })
+    const before = await geometry()
+    expect(before.clipped).toBe(true)
+    expect(before.overflow).toBe(false)
+    for (const height of before.heights) expect(height).toBeCloseTo(before.lineHeight, 0)
+    expect(before.followingOffset).toBeLessThan(before.lineHeight * 2)
+    const ordinary = output.locator('span').filter({ hasText: body }).last()
+    expect((await ordinary.boundingBox())!.height).toBeGreaterThan(before.lineHeight * 3)
+    screenExtra = screen(' ⡀ ⠂                      ⠠ ⠠       ⠈'.repeat(10))
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+    await expect.poll(() => decorations.nth(1).textContent()).toBe(' ⡀ ⠂                      ⠠ ⠠       ⠈'.repeat(10))
+    const after = await geometry()
+    expect(after.heights).toEqual(before.heights)
+    expect(after.followingOffset).toBeCloseTo(before.followingOffset, 0)
+    await page.setViewportSize({ width: 320, height: 844 })
+    await expect.poll(() => page.locator('[class*="centerCol"]').evaluate(element => element.getBoundingClientRect().width)).toBe(320)
+    const narrow = await geometry()
+    expect(narrow.heights).toEqual(before.heights)
+    expect(narrow.overflow).toBe(false)
+    await compareOrRefreshGolden(join(EXPECTED, 'mobile-decoration-lines.expected.md'),
+      await captureStableAria(page, '.dsh-kitty-output', scaffold.workspaceCwd), MODE)
+    if (MODE === 'refresh') await page.screenshot({ path: join(ARTIFACTS, 'mobile-decoration-lines.png') })
+  })
+
+  it('scrolls locally before forwarding edge wheel gestures and returns to Kitty live output', async () => {
+    allowScroll = true
+    screenExtra = '\n' + Array.from({ length: 100 }, (_, index) => `Terminal line ${index + 1}`).join('\n')
+    await openWindows()
+    await showScreen('Alpha')
+    const output = page.locator('.dsh-kitty-screen')
+    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    await draft.fill('Keep the draft while browsing history')
+    await output.evaluate((element) => { element.scrollTop = 200 })
+    await output.hover()
+    await page.mouse.wheel(0, -80)
+    await expect.poll(() => output.evaluate(element => element.scrollTop)).toBeLessThan(200)
+    expect(scrollAmounts).toEqual([])
+    const cancelled = await output.evaluate((element) => {
+      element.scrollTop = 0
+      const zoom = new WheelEvent('wheel', { deltaY: -40, ctrlKey: true, cancelable: true })
+      element.dispatchEvent(zoom)
+      const horizontal = new WheelEvent('wheel', { deltaX: -100, deltaY: -1, cancelable: true })
+      element.dispatchEvent(horizontal)
+      const upward = new WheelEvent('wheel', { deltaY: -120, cancelable: true })
+      element.dispatchEvent(upward)
+      return [zoom.defaultPrevented, horizontal.defaultPrevented, upward.defaultPrevented]
+    })
+    expect(cancelled).toEqual([false, false, true])
+    await output.filter({ hasText: 'REMOTE_OFFSET_-3' }).waitFor()
+    expect(scrollAmounts).toEqual([-3])
+    expect(await output.evaluate(element => element.scrollTop)).toBe(0)
+    expect(await draft.inputValue()).toBe('Keep the draft while browsing history')
+    await output.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+      element.dispatchEvent(new WheelEvent('wheel', { deltaY: 2, deltaMode: WheelEvent.DOM_DELTA_LINE, cancelable: true }))
+    })
+    await output.filter({ hasText: 'REMOTE_OFFSET_-1' }).waitFor()
+    await output.evaluate((element) => {
+      element.scrollTop = 0
+      element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1000, deltaMode: WheelEvent.DOM_DELTA_LINE, cancelable: true }))
+    })
+    await output.filter({ hasText: 'REMOTE_OFFSET_-9' }).waitFor()
+    expect(scrollAmounts).toEqual([-3, 2, -SCROLL_OPTIONS.maxLines])
+    await page.getByRole('button', { name: 'Latest output ↓', exact: true }).click()
+    await output.filter({ hasText: 'REMOTE_OFFSET_0' }).waitFor()
+    await expect.poll(() => output.evaluate(element => Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop)))
+      .toBeLessThan(2)
+    expect(scrollAmounts).toEqual([-3, 2, -SCROLL_OPTIONS.maxLines, 'end'])
+    expect(await draft.inputValue()).toBe('Keep the draft while browsing history')
+  })
+
+  it('forwards mobile edge swipes and leaves the Include scrollback view entirely local', async () => {
+    allowScroll = true
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWindows()
+    await showScreen('Alpha')
+    const output = page.locator('.dsh-kitty-screen')
+    const cdp = await page.context().newCDPSession(page)
+    try {
+      const start = await output.locator('span').filter({ hasText: 'Ready' }).first().boundingBox()
+      const x = start!.x + start!.width / 2
+      const y = start!.y + start!.height / 2
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true })
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + 100 }] })
+      await output.filter({ hasText: 'REMOTE_OFFSET_-5' }).waitFor()
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + 200 }] })
+      await output.filter({ hasText: 'REMOTE_OFFSET_-10' }).waitFor()
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    } finally { await cdp.detach() }
+    expect(scrollAmounts).toEqual([-5, -5])
+    await compareOrRefreshGolden(join(EXPECTED, 'mobile-scrolled-terminal.expected.md'),
+      await captureStableAria(page, '.dsh-kitty-output', scaffold.workspaceCwd), MODE)
+    if (MODE === 'refresh') await page.screenshot({ path: join(ARTIFACTS, 'mobile-scrolled-terminal.png') })
+    await page.getByRole('button', { name: 'Back to Kitty windows', exact: true }).click()
+    await page.getByRole('button', { name: 'Terminal options', exact: true }).click()
+    await page.getByRole('button', { name: 'Include scrollback', exact: true }).click()
+    await showScreen('Alpha')
+    expect(await output.evaluate((element) => {
+      element.scrollTop = 0
+      const event = new WheelEvent('wheel', { deltaY: -200, cancelable: true })
+      element.dispatchEvent(event)
+      return event.defaultPrevented
+    })).toBe(false)
+    await page.getByRole('button', { name: 'Latest output ↓', exact: true }).click()
+    await expect.poll(() => page.getByRole('button', { name: 'Latest output ↓', exact: true }).isVisible()).toBe(false)
+    expect(scrollAmounts).toEqual([-5, -5])
+  })
+
+  it('cancels an older screen poll before displaying a scrolled viewport', async () => {
+    allowScroll = true
+    await openWindows()
+    await showScreen('Alpha')
+    const output = page.locator('.dsh-kitty-screen')
+    let enter!: () => void
+    let release!: () => void
+    const entered = new Promise<void>((resolve) => { enter = resolve })
+    const barrier = new Promise<void>((resolve) => { release = resolve })
+    let pending: Promise<void> | undefined
+    const isScreen = (url: URL) => url.pathname === '/api/dsh/kitty' && url.searchParams.get('token') === 'alpha-token'
+    await page.route(isScreen, (route) => {
+      pending = (async () => {
+        enter()
+        await barrier
+        await route.fulfill({ json: { text: 'STALE_POLL_MUST_NOT_REPLACE_VIEWPORT' } })
+      })()
+      return pending
+    })
+    try {
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+      await entered
+      const aborted = page.waitForEvent('requestfailed', request => isScreen(new URL(request.url())))
+      await output.evaluate(element => element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, deltaMode: 1, cancelable: true })))
+      await aborted
+      await output.filter({ hasText: 'REMOTE_OFFSET_-1' }).waitFor()
+      release()
+      await pending
+      expect(await output.textContent()).not.toContain('STALE_POLL_MUST_NOT_REPLACE_VIEWPORT')
+      expect(scrollAmounts).toEqual([-1])
+    } finally {
+      release()
+      await pending
+    }
+  })
+
+  it('coalesces gestures during a scroll and ignores its late response after switching windows', async () => {
+    allowScroll = true
+    await openWindows()
+    await showScreen('Alpha')
+    scrollBarrier = new Promise<void>((resolve) => { releaseScroll = resolve })
+    const output = page.locator('.dsh-kitty-screen')
+    await output.evaluate(element => element.dispatchEvent(new WheelEvent('wheel', { deltaY: -2, deltaMode: 1, cancelable: true })))
+    await expect.poll(() => scrollAmounts).toEqual([-2])
+    await output.evaluate((element) => {
+      for (let index = 0; index < 3; index++) element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, deltaMode: 1, cancelable: true }))
+    })
+    scrollBarrier = undefined
+    releaseScroll!()
+    await output.filter({ hasText: 'REMOTE_OFFSET_-5' }).waitFor()
+    expect(scrollAmounts).toEqual([-2, -3])
+    scrollBarrier = new Promise<void>((resolve) => { releaseScroll = resolve })
+    await output.evaluate(element => element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, deltaMode: 1, cancelable: true })))
+    await expect.poll(() => scrollAmounts).toEqual([-2, -3, -1])
+    await showScreen('Beta')
+    releaseScroll!()
+    await Promise.all([...pendingScrollResponses])
+    await Promise.all([...pendingComposerResponses])
+    expect(await output.textContent()).toContain('BETA_SCREEN_READY')
+    expect(await output.textContent()).not.toContain('REMOTE_OFFSET')
+    scrollBarrier = undefined
+    await showScreen('Alpha')
+    await output.evaluate((element) => {
+      element.dispatchEvent(new WheelEvent('wheel', { deltaY: -7, deltaMode: 1, cancelable: true }))
+      document.querySelector<HTMLButtonElement>('button[aria-label="#2 · Beta terminal"]')!.click()
+    })
+    await output.filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    await showScreen('Alpha')
+    await output.evaluate(element => element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, deltaMode: 1, cancelable: true })))
+    await expect.poll(() => scrollAmounts).toEqual([-2, -3, -1, -1])
+    await output.filter({ hasText: 'REMOTE_OFFSET_-7' }).waitFor()
   })
 
   it('returns stale terminals to the window list and refreshes empty and failed lists', async () => {

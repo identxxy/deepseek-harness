@@ -14,8 +14,8 @@ type KittyHeaderProps = PropsLocale<'dsh.kitty'> & PropsRuntime<'workspace.panel
  * @param props - catalog, selection and return action from the plugin registration.
  * @returns the pane header's return control and current title.
  */
-export function KittyHeader({ t, useStore, useCatalog, browse }: KittyHeaderProps) {
-  const selected = useStore(s => s.selected);
+export function KittyHeader({ t, useStore, useCatalog, browse, paneId }: KittyHeaderProps) {
+  const selected = useStore(s => s.panes[paneId]?.selected);
   const pane = useCatalog(s => s.value?.panes.find(p => p.token === selected));
   const title = pane ? `#${pane.id} · ${pane.title}` : t('title');
   return <div className="dsh-kitty-pane-header">
