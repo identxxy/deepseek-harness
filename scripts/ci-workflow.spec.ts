@@ -389,6 +389,15 @@ describe('CI workflow', () => {
 })
 
 describe('DeepSeek e2e workflow', () => {
+  it('requires manual dispatch outside the upstream repository and excludes untrusted PRs', () => {
+    const e2e = workflowJob(loadWorkflow('.github/workflows/e2e.yml'), 'e2e')
+    expect(String(e2e.if).replace(/\s+/g, ' ').trim()).toBe([
+      "(github.repository == 'deepseek-ai/deepseek-harness' || github.event_name == 'workflow_dispatch')",
+      "&& (github.event_name != 'pull_request'",
+      "|| !(github.event.pull_request.head.repo.fork || github.event.pull_request.user.login == 'dependabot[bot]'))",
+    ].join(' '))
+  })
+
   it('prepares bubblewrap from the pinned payload without a package transaction', () => {
     const workflow = loadWorkflow('.github/workflows/e2e.yml')
     const e2e = workflowJob(workflow, 'e2e')
