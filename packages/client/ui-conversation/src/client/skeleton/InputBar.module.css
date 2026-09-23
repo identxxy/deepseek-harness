@@ -358,3 +358,77 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+
+.attachments {
+  display: contents;
+}
+
+.compact .attachments {
+  display: block;
+  min-width: 0;
+}
+
+.compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0;
+  padding: 4px;
+  border-radius: 16px;
+}
+
+.compact .attachments,
+.compact .accessory,
+.options {
+  grid-column: 1 / -1;
+}
+
+.compact .scroll {
+  margin: 0;
+  min-width: 0;
+}
+
+.compact .input {
+  min-height: 32px;
+  padding: 4px 6px;
+}
+
+.compact .placeholder {
+  inset: 4px 6px auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.compact .row {
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 0;
+  container-type: normal;
+}
+
+.compact .tools,
+.compact .trailing {
+  gap: 4px;
+}
+
+.compact .primary {
+  width: 32px;
+  height: 32px;
+  transform: none;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 4px 2px;
+  container-type: inline-size;
+}
+
+.compactRoot {
+  padding-bottom: 4px;
+}

@@ -27,7 +27,8 @@ export function useHost(): SlotRendererHost {
 }
 
 const RootBindingContext = createContext<StandardSourceBinding | null>(null)
-const ScopeBindingContext = createContext<StandardSourceBinding | null>(null)
+/** Binding inherited by scoped slots within the nearest Session area. */
+export const ScopeBindingContext = createContext<StandardSourceBinding | null>(null)
 
 /**
  * Read the root standard-source binding.

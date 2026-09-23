@@ -11,7 +11,7 @@ import {
   type StoredEntry, type Translate,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  HostContext, RootStandardProvider, ScopeProvider, SlotAssemblyError,
+  HostContext, RootStandardProvider, ScopeBindingContext, ScopeProvider, SlotAssemblyError,
   keyedObservableHook, maybeObservableHook, observableHook, useHost, useRootBinding,
   useScopeBinding,
 } from './bindings.tsx'
@@ -395,7 +395,7 @@ function standardProps(
 
 const scopeAreaCache = new WeakMap<SlotScopeAdapter, SessionProviderComponent>()
 
-/** Bind one domain-owned scope area renderer to the current scope binding. */
+/** Bind one domain-owned scope area renderer to its explicit or inherited scope identity. */
 function scopeAreaProvider(adapter: SlotScopeAdapter): SessionProviderComponent {
   let Provider = scopeAreaCache.get(adapter)
   if (Provider !== undefined) return Provider
@@ -403,8 +403,16 @@ function scopeAreaProvider(adapter: SlotScopeAdapter): SessionProviderComponent 
     throw new SlotAssemblyError("scope 'session' adapter does not provide its area renderer")
   }
   const renderArea = adapter.renderArea.bind(adapter)
+  const subscribe = adapter.subscribe.bind(adapter)
   Provider = function ScopeAreaProvider(props: SessionAreaProps): ReactNode {
-    return renderArea(useScopeBinding(), props)
+    const current = useScopeBinding()
+    const explicit = useSyncExternalStore(
+      props.sessionId === undefined ? noopSubscribe : subscribe,
+      () => props.sessionId === undefined ? undefined : adapter.resolve(props.sessionId),
+    )
+    const binding = props.sessionId === undefined ? current : explicit
+    if (binding === undefined) return <>{props.empty?.() ?? null}</>
+    return <ScopeBindingContext.Provider value={binding}>{renderArea(binding, props)}</ScopeBindingContext.Provider>
   }
   scopeAreaCache.set(adapter, Provider)
   return Provider

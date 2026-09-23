@@ -51,7 +51,7 @@ The plugin activates after `slots`, `sessions`, and `layout`; it installs `creat
 
 ### Slot bindings
 
-`createSlotRenderer` connects the slot registry to React: entry lists become reactive sources, and each outlet renders through the installed renderer. Business plugins pass bare observable sources through typed slot `hooks`; the renderer binds them at the outlet via the uSES adapter.
+`createSlotRenderer` connects the slot registry to React: entry lists become reactive sources, and each outlet renders through the installed renderer. Business plugins pass bare observable sources through typed slot `hooks`; the renderer binds them at the outlet via the uSES adapter. An explicit `SessionProvider` identity supplies a local binding to all nested hooks, injected props and stores; missing identities render the empty branch without falling back to global selection. Binding subscriptions make late availability and replacement visible without a focus change.
 
 ### Identity
 

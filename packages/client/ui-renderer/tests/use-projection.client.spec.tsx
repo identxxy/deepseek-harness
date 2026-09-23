@@ -71,6 +71,7 @@ function makeHost() {
     props: {},
   })
   const sessionAdapter: SlotScopeAdapter = {
+    subscribe: () => () => {},
     current: currentBinding,
     resolve: binding,
     renderArea: (scopeBinding, { empty, children }) => scopeBinding.key === undefined

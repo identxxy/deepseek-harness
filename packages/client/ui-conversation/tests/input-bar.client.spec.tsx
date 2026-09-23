@@ -80,6 +80,7 @@ interface BenchOptions {
   /** The hub's steer-all face (empty-draft accelerated Enter). */
   steerQueue?: () => void
   variant?: 'hero' | 'composer'
+  compact?: boolean
   placeholder?: string
   t?: InputBarProps['t']
   command?: (line: string) => Promise<boolean>
@@ -201,6 +202,7 @@ function bench(over?: BenchOptions) {
     t: over?.t ?? makeTranslate(zh, commonZh),
     renderSlot,
     variant: over?.variant ?? 'composer',
+    ...(over?.compact === true ? { compact: true } : {}),
     ...(over?.inert === true ? { disabled: true } : {}),
     ...(over?.blocked !== undefined ? { blocked: over.blocked } : {}),
     ...(over?.workspacePickerOpen !== undefined ? { workspacePickerOpen: over.workspacePickerOpen } : {}),
@@ -1314,6 +1316,51 @@ describe('strips and variants', () => {
   })
 })
 
+describe('pane input ownership', () => {
+  it('keeps one editor root across duplicate Session panes and preserves it when the inactive pane closes', () => {
+    const { view, props, shell, slotCalls } = bench({ draft: 'shared draft' })
+    const panes = (leftActive: boolean, leftMounted = true) => <>
+      {leftMounted && <section key="left"><InputBar {...props} active={leftActive} /></section>}
+      <section key="right"><InputBar {...props} active={!leftActive} /></section>
+    </>
+    view.rerender(panes(true))
+    let inputs = view.container.querySelectorAll<HTMLElement>('[data-composer-input]')
+    expect(shell.editor.getRootElement()).toBe(inputs[0])
+    expect(inputs[1]?.textContent).toBe('shared draft')
+    expect(inputs[1]?.getAttribute('aria-readonly')).toBe('true')
+    const attachmentOwner = slotCalls.filter(call => call.key === 'conversation.input.attachments').at(-1)?.owner
+    expect((attachmentOwner as ComposerAttachmentsOwnerProps).documentDrop).toBe(false)
+
+    view.rerender(panes(false))
+    inputs = view.container.querySelectorAll<HTMLElement>('[data-composer-input]')
+    expect(shell.editor.getRootElement()).toBe(inputs[1])
+    expect(inputs[0]?.textContent).toBe('shared draft')
+    act(() => { shell.setDraft('updated draft') })
+    expect(inputs[0]?.textContent).toBe('updated draft')
+    view.rerender(panes(false, false))
+    expect(shell.editor.getRootElement()).toBe(view.container.querySelector('[data-composer-input]'))
+    expect(shell.snapshot.draft).toBe('updated draft')
+    view.unmount()
+    expect(shell.editor.getRootElement()).toBeNull()
+  })
+
+  it('accepts a local file drop once without delegating it to document intake', () => {
+    const addFiles = vi.fn((_files: readonly File[]) => null)
+    const { view } = bench({ addFiles })
+    const file = new File(['sample'], 'sample.txt', { type: 'text/plain' })
+    const documentIntake = vi.fn((event: Event) => { if (!event.defaultPrevented) addFiles([file]) })
+    document.addEventListener('drop', documentIntake)
+    try {
+      fireEvent.drop(view.container.querySelector('[data-composer-card]')!, { dataTransfer: { types: ['Files'], files: [file] } })
+      expect(documentIntake).toHaveBeenCalledOnce()
+      expect(addFiles).toHaveBeenCalledOnce()
+      expect(addFiles).toHaveBeenCalledWith([file])
+    } finally {
+      document.removeEventListener('drop', documentIntake)
+    }
+  })
+})
+
 describe('command launcher chrome and control seats', () => {
   it('renders the command launcher; the Access chip is absent without the permissions projection; the control seats render EMPTY without entries', () => {
     const { view, slotCalls } = bench()
@@ -1322,14 +1369,51 @@ describe('command launcher chrome and control seats', () => {
     expect(view.queryByLabelText(/^访问模式/)).toBeNull()
     // Every seat dispatched, nothing rendered (render passes may repeat; the
     // seat set is the contract).
-    expect([...new Set(slotCalls.map(c => c.key))]).toEqual([
+    expect([...new Set(slotCalls.map(c => c.key))].sort()).toEqual([
       'conversation.input.overlay', 'conversation.input.attachments',
       'conversation.input.plan', 'conversation.input.left',
       'conversation.input.right', 'conversation.input.model',
       'conversation.composer.dock',
-    ])
+    ].sort())
     expect(view.queryByLabelText('Plan mode')).toBeNull()
     expect(view.queryByLabelText('Model')).toBeNull()
+  })
+
+  it('keeps pane controls compact and expands secondary options without losing the draft', () => {
+    const { view, textarea } = bench({
+      compact: true,
+      draft: 'keep this draft',
+      planEntry: <button>Plan mode</button>,
+      modelEntry: <button>Model</button>,
+      footer: <div data-testid="pane-stats">Stats</div>,
+    })
+    const more = view.getByRole('button', { name: '更多选项' })
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    expect(view.queryByTestId('pane-stats')).toBeNull()
+    expect(view.queryByRole('button', { name: 'Plan mode' })).toBeNull()
+    expect(view.queryByRole('button', { name: 'Model' })).toBeNull()
+    expect(view.getByLabelText('指令')).toBeTruthy()
+    expect(view.getByLabelText('添加附件')).toBeTruthy()
+    expect(view.getByLabelText('发送消息')).toBeTruthy()
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    expect(view.getByTestId('pane-stats')).toBeTruthy()
+    expect(view.getByRole('button', { name: 'Plan mode' })).toBeTruthy()
+    expect(view.getByRole('button', { name: 'Model' })).toBeTruthy()
+    fireEvent.click(more)
+    expect(view.queryByRole('button', { name: 'Model' })).toBeNull()
+    expect(view.queryByTestId('pane-stats')).toBeNull()
+    expect(textarea.textContent).toBe('keep this draft')
+  })
+
+  it('keeps a blocked pane model chooser reachable and leaves hero controls expanded', () => {
+    const blocked = bench({ compact: true, blocked: { reason: 'Choose a model' }, modelEntry: <button>Model</button> })
+    expect(blocked.view.getByRole('button', { name: 'Model' })).toBeTruthy()
+    expect(blocked.view.getByRole('button', { name: '更多选项' }).getAttribute('aria-expanded')).toBe('true')
+    cleanup()
+    const hero = bench({ compact: true, variant: 'hero', modelEntry: <button>Model</button> })
+    expect(hero.view.queryByRole('button', { name: '更多选项' })).toBeNull()
+    expect(hero.view.getByRole('button', { name: 'Model' })).toBeTruthy()
   })
 
   it('passes the textarea selection to the command menu launcher and reflects its expanded state', () => {

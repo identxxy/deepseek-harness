@@ -55,7 +55,7 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 
 ### 渲染器约定
 
-`renderer.ts` 携带安装约定（`SlotRenderer`、`SlotRendererHost`）以及 `StaleAuthorizationError`/`SlotOwnershipError`；ui-renderer 同时持有实现及其插件生命周期安装。引擎产物与渲染器宿主约定携带裸快照 source（`getSnapshot`/`subscribe`），绝不携带 React 钩子——钩子绑定属于渲染机制。
+`renderer.ts` 携带安装约定（`SlotRenderer`、`SlotRendererHost`）以及 `StaleAuthorizationError`/`SlotOwnershipError`；ui-renderer 同时持有实现及其插件生命周期安装。引擎产物与渲染器宿主约定携带裸快照 source（`getSnapshot`/`subscribe`），绝不携带 React 钩子——钩子绑定属于渲染机制。Scope adapter 独立于当前选择的数据源发布所有绑定的可用性和标识变化；显式 Session 区域订阅这些发布，并解析自己的标识。
 
 </details>
 

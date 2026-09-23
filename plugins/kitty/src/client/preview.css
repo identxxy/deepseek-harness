@@ -1,3 +1,8 @@
+@media (min-width: 768px) {
+  :root:has(.dsh-kitty-browser-handle, .dsh-kitty-preview) [data-pane-canvas] {
+    margin-right: 44px;
+  }
+}
 button.dsh-kitty-browser-handle {
   position: fixed;
   right: 0;

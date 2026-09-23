@@ -1,0 +1,10 @@
+- button "Back to Kitty windows":
+  - img
+- text: Kitty terminal
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
+- main:
+  - heading "Select a Kitty window" [level=3]
+  - paragraph: The saved Kitty window is no longer available. Choose another window.
+  - button "Kitty windows"

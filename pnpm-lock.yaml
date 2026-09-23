@@ -10132,6 +10132,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../vendor/cordis
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../packages/util/brand
       '@deepseek-ai/dsh-client-connection':
         specifier: workspace:^
         version: link:../../packages/client/connection

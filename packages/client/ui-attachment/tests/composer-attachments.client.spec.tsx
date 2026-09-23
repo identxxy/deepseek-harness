@@ -98,6 +98,40 @@ describe('ComposerAttachments', () => {
     expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
   })
 
+  it('clears the drag invitation when its pane loses document intake', () => {
+    const view = render(<ComposerAttachments {...props({ documentDrop: true })} />)
+    const dataTransfer = { types: ['Files'], files: [attachment('drop').file] }
+    fireEvent.dragEnter(document.body, { dataTransfer })
+    expect(view.getByText('文件或图片拖动到此处即可添加')).toBeTruthy()
+    view.rerender(<ComposerAttachments {...props({ documentDrop: false })} />)
+    expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
+  })
+
+  it('moves document intake between panes and leaves locally handled drops consumed', () => {
+    const left = vi.fn()
+    const right = vi.fn()
+    const panes = (leftActive: boolean) => <>
+      <ComposerAttachments {...props({ onAddFiles: left, documentDrop: leftActive })} />
+      <ComposerAttachments {...props({ onAddFiles: right, documentDrop: !leftActive })} />
+    </>
+    const view = render(panes(true))
+    const dataTransfer = { types: ['Files'], files: [attachment('drop').file] }
+    fireEvent.drop(document.body, { dataTransfer })
+    expect(left).toHaveBeenCalledOnce()
+    expect(right).not.toHaveBeenCalled()
+    view.rerender(panes(false))
+    fireEvent.drop(document.body, { dataTransfer })
+    expect(left).toHaveBeenCalledOnce()
+    expect(right).toHaveBeenCalledOnce()
+    const handled = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(handled, 'dataTransfer', { value: dataTransfer })
+    handled.preventDefault()
+    fireEvent(document.body, handled)
+    expect(right).toHaveBeenCalledOnce()
+    view.unmount()
+    expect(fireEvent.drop(document.body, { dataTransfer })).toBe(true)
+  })
+
   it('accepts file drops anywhere on the document and keeps non-file drags native', () => {
     const onAddFiles = vi.fn()
     const view = render(<ComposerAttachments {...props({

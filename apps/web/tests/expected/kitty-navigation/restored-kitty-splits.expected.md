@@ -1,10 +1,10 @@
 - button "Back to Kitty windows":
   - img
-- text: "#3 · Gamma terminal"
+- text: "#1 · Alpha terminal renamed"
 - button "Split right": ⇥
 - button "Split down": ⇲
 - button "Close pane": ×
-- main: "GAMMA_SCREEN_READY $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
+- main: "ALPHA_SCREEN_READY $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
 - contentinfo:
   - button "Attach image":
     - img
@@ -12,32 +12,13 @@
     - img
   - textbox "Text for the selected terminal":
     - /placeholder: Message this terminal…
-  - checkbox "Append newline"
-  - text: Append newline
-  - button "Send":
-    - img
-- button "Back to Kitty windows":
-  - img
-- text: "#2 · Beta terminal"
-- button "Split right": ⇥
-- button "Split down": ⇲
-- button "Close pane": ×
-- main: "BETA_SCREEN_READY $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
-- contentinfo:
-  - button "Attach image":
-    - img
-  - button "Terminal keys":
-    - img
-  - textbox "Text for the selected terminal":
-    - /placeholder: Message this terminal…
-    - text: Keep Beta draft
   - checkbox "Append newline" [checked]
   - text: Append newline
   - button "Send":
     - img
 - button "Back to Kitty windows":
   - img
-- text: "#2 · Beta terminal"
+- text: "#2 · Beta terminal renamed"
 - button "Split right": ⇥
 - button "Split down": ⇲
 - button "Close pane": ×

@@ -51,7 +51,7 @@ kind: "package-reference"
 
 ### Slot 绑定
 
-`createSlotRenderer` 把 slot 注册表连接到 React：条目列表成为响应式 source，每个 outlet 经已安装的渲染器渲染。业务插件通过带类型的 slot `hooks` 传递裸 observable source；渲染器经 uSES 适配器在 outlet 处完成绑定。
+`createSlotRenderer` 把 slot 注册表连接到 React：条目列表成为响应式 source，每个 outlet 经已安装的渲染器渲染。业务插件通过带类型的 slot `hooks` 传递裸 observable source；渲染器经 uSES 适配器在 outlet 处完成绑定。显式 `SessionProvider` 标识为所有嵌套 hook、注入 prop 及 store 提供局部绑定；标识缺失时渲染空分支，不回退到全局选择。绑定订阅使延迟可用或替换后的绑定无需改变焦点即可显示。
 
 ### 身份
 

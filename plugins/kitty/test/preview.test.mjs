@@ -78,6 +78,40 @@ test('automatic file reads retain the selected real directory and decode paths o
   assert.match((await preview.render({ url: outside })).html, /PRIVATE_VALUE/);
 });
 
+test('configured local asset directories inline media without widening report navigation or fetch scopes', linux, async t => {
+  const { preview: restricted, root, file } = await fixture(t);
+  const poster = await file('assets/poster.png', Buffer.from([137, 80, 78, 71]));
+  const video = await file('assets/video.mp4', Buffer.from('test-video'));
+  const url = await file('report/index.html', `<video poster="${poster}" src="${video}" controls></video>`);
+  await assert.rejects(restricted.render({ url }), /preview_scope_forbidden/);
+  const preview = createPreview(resolveConfig({ previewAssetDirectories: [join(root, 'assets')] }));
+  t.after(() => preview.close());
+  const page = await preview.render({ url });
+  assert.match(page.html, /poster="data:image\/png;base64,iVBORw=="/);
+  assert.match(page.html, /src="data:video\/mp4;base64,dGVzdC12aWRlbw=="/);
+  for (const asset of [poster, video]) {
+    await assert.rejects(preview.render({ url: asset, scope: page.scope }), /preview_scope_forbidden/);
+    await assert.rejects(preview.render({ url: asset, scope: page.scope, resource: true }), /preview_scope_forbidden/);
+  }
+});
+
+test('configured asset directories reject symlink escapes and cannot grant local files to HTTP reports', linux, async t => {
+  const { root, file } = await fixture(t);
+  const allowed = await file('assets/poster.png', 'allowed');
+  await file('private/secret.png', 'private');
+  await symlink(join(root, 'private', 'secret.png'), join(root, 'assets', 'escape.png'));
+  const escape = pathToFileURL(join(root, 'assets', 'escape.png')).href;
+  const url = await file('report/index.html', `<img src="${escape}">`);
+  const preview = createPreview(resolveConfig({ previewAssetDirectories: [join(root, 'assets')] }));
+  t.after(() => preview.close());
+  await assert.rejects(preview.render({ url }), /preview_scope_forbidden/);
+  const origin = await server(t, (_request, response) => {
+    response.setHeader('content-type', 'text/html');
+    response.end(`<img src="${allowed}">`);
+  });
+  await assert.rejects(preview.render({ url: origin }), /preview_scope_forbidden/);
+});
+
 test('HTTP reports load same-origin assets and preserve status for read-only fetches', async t => {
   const { preview } = await fixture(t);
   const cookies = [];

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包提供 Web GUI 的外壳布局：一个三栏 AppFrame，带可缩放的侧栏与详情面板；一条让步链，在空间不足时先收缩详情栏、随后自动关闭它；以及 `ctx.layout` 面板几何服务，供其他插件调用以打开或关闭详情栏。1024px 以下时 AppFrame 变为单栏导航：一次只渲染一个全宽目标（Session 列表或对话），进入对话会推入一条同 URL 的浏览器 History 条目，因此浏览器后退与平台边缘滑动手势会在离开 DSH 前回到 Session 列表；未激活的目标仍保持挂载但宽度为零。它还承载主题呈现器，把解析后的配色方案、别名 token、正文字号与 `theme-color` 元数据投影到 document。需要标准窗口外观时选择它；面板几何是瞬时的，重新加载即重置。
+本包提供 Web GUI 的外壳布局：一个三栏 AppFrame，带可缩放的侧栏与详情面板；一条让步链，在空间不足时先收缩详情栏、随后自动关闭它；以及 `ctx.layout` 面板几何服务，供其他插件调用以打开或关闭详情栏。1024px 以下时 AppFrame 变为单栏导航：一次只渲染一个全宽目标（Session 列表或对话），进入对话会推入一条同 URL 的浏览器 History 条目，因此浏览器后退与平台边缘滑动手势会在离开 DSH 前回到 Session 列表；未激活的目标仍保持挂载但宽度为零。它还承载主题呈现器，把解析后的配色方案、别名 token、正文字号与 `theme-color` 元数据投影到 document。需要标准窗口外观时选择它；侧栏和详情栏几何是瞬时的，重新加载即重置。
 
 ## 目录
 
@@ -27,7 +27,7 @@ kind: "package-reference"
 
 在 root 槽位挂载本插件；它随即围绕占据侧栏、会话与详情栏的内容渲染应用框架。用户拖动不可见命中条带缩放侧栏、拖动浮动胶囊缩放详情面板；窗口变窄时只有详情栏收缩，随后自动关闭。关闭的侧栏保留 56px 控制栏；详情栏关闭到零宽度。
 
-插件通过 `ctx.layout.openActor({ kind: 'panel', id })` 打开原生窗格，由 root 作用域的 `workspace.panel` 渲染内容。它复用窗格分屏、关闭及移动端导航，不创建 Session，也不取得 Console 所有权。窗格树保存在设备本地，侧栏和详情栏宽度仍为瞬时状态。keyed `workspace.panel.header` 按 actor id 选择内容，在原生窗格标题栏内显示插件标题与导航，并接收与正文相同的 owner props；分屏与关闭控件仍由布局提供。没有对应内容时，标题栏显示通用 Panel 标签与 actor id。Keyed `workspace.panel.composer` 槽位在整张画布下方为聚焦的插件 actor 渲染一次，接收相同的窗格 owner props，且 `active: true`。聚焦 Agent 或 Console，或插件未注册输入区条目时，该槽位不渲染内容。
+插件通过 `ctx.layout.openActor({ kind: 'panel', id })` 打开原生窗格，由 root 作用域的 `workspace.panel` 渲染内容。它复用窗格分屏、关闭及移动端导航，不创建 Session，也不取得 Console 所有权。窗格树、各 Agent Session ID 和活动窗格保存在当前来源的浏览器存储中，侧栏和详情栏宽度仍为瞬时状态。重新加载恢复保存的 actor 和焦点；手机显示聚焦窗格，同时保留完整窗格树。插件负责恢复自己的外部目标。keyed `workspace.panel.header` 按 actor id 选择内容，在原生窗格标题栏内显示插件标题与导航，并接收与正文相同的 owner props；分屏与关闭控件仍由布局提供。没有对应内容时，标题栏显示通用 Panel 标签与 actor id。插件内容持有窗格内的输入区。显式 Agent 窗格通过 conversation owner props 接收 `compactInput: true` 及自身的 `active` 状态；指针及键盘焦点选择对应窗格。
 
 插件在 `sidebar.page` 注册上下文浏览页，并通过 `ctx.layout.openSidebarPage(key)` 打开它；此操作展开侧栏，并在移动端显示该列表。`showConversation()` 和 `showSessionList()` 保留此页面；`closeSidebarPage()` 返回主列表。移动端 History 按主列表 → 上下文列表 → 对话组织，支持浏览器后退、前进和重新加载；UI 返回控件沿同一组条目后退。页面属于瞬时查看状态，不写入窗格持久化记录。侧栏直接从布局 store 接收 `activePaneId`，使上下文选择与 `openActor()` 指向同一个窗格。
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-一次 `register()` 调用把 `AppFrame` 贡献进运行时的内建 `'root'` 槽位，并在同一刻声明子槽位（`sidebar`、`conversation`、`details`、`shell.overlay`、`workspace.console`、`workspace.panel`、`workspace.panel.header`、`workspace.panel.composer`）、安放布局 store（面板几何）并接好 `ctx.layout` 面板动作服务。瞬时布局 store 以默认宽度启动侧栏、保持详情栏关闭，仅持久化窗格树与活动窗格。AppFrame 始终挂载会话与详情两栏；已连接 Session 经 `SessionProvider` 渲染。它把所选 Session 标题投影到构建配置的产品标题或本地化 `common.brand.localBuild` 回退值之上，因此 locale revision 会随根 entry 一起更新文档元数据。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号与 token 变量，再把渲染出的背景测量为唯一的颜色依据。
+一次 `register()` 调用把 `AppFrame` 贡献进运行时的内建 `'root'` 槽位，并在同一刻声明子槽位（`sidebar`、`conversation`、`details`、`shell.overlay`、`workspace.console`、`workspace.panel`、`workspace.panel.header`）、安放布局 store（面板几何）并接好 `ctx.layout` 面板动作服务。瞬时布局 store 以默认宽度启动侧栏、保持详情栏关闭，仅持久化窗格树与活动窗格。首次就绪的 Session 目录建立全局选择基线，不替换恢复的活动 actor；后续从侧栏选择 Session 时仅替换聚焦窗格。AppFrame 始终挂载会话与详情两栏；已连接 Session 经 `SessionProvider` 渲染。它把所选 Session 标题投影到构建配置的产品标题或本地化 `common.brand.localBuild` 回退值之上，因此 locale revision 会随根 entry 一起更新文档元数据。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号与 token 变量，再把渲染出的背景测量为唯一的颜色依据。
 
 </details>
 
@@ -83,7 +83,7 @@ kind: "package-reference"
 - **让步链自动关闭通过推导零宽度实现，不触碰偏好宽度**——窗口变宽时面板自行恢复；消费方不得把 store 中的详情宽度当作渲染真值。
 - **挤压重排期间无滚动锚定**——布局变化可能移动读者的视口。
 
-- **手机 History 不会在 URL 中编码 Session id**——重新加载时恢复运行时选中的 Session，History 负责活动侧栏页面及列表／对话导航。
+- **手机 History 不会在 URL 中编码 Session id**——重新加载恢复保存的窗格和焦点，History 保留活动侧栏页面及列表／对话导航。
 
 <a id="dev-note"></a>
 ### 开发备注

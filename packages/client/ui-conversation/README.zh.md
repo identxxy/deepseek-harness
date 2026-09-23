@@ -38,6 +38,8 @@ target package 通过 declaration merge 扩展 snapshot 与 Location data map，
 
 本包注册 optional-Session `conversation` shell、strict Session header/body、View list、composer chain 与 bar、输入区域、Hero 区域、queue dock、草稿持久化和 phase 计算。`ctx.uiSession.provide()` 从同一个 Session binding 物化 Conversation 与 input source，并将 `inputActions` 作为稳定标准 prop 提供。
 
+显式布局窗格使用紧凑的默认输入区：文字、指令、附件和发送／停止共用一行，更多选项展开访问权限、计划、模型、次要控件及统计栏。文字增高至原有高度上限；模型阻塞时自动显示选择器。Hero 和隐式对话保留原有呈现，临时输入区接管保持自身布局。只有聚焦窗格绑定 Session editor 和文档附件接收，其他窗格显示可聚焦的草稿镜像。重复窗格共享 Session 输入状态，但独立释放各自的持久化镜像。
+
 View 选择规则固定：有效且已注册的持久化选择优先，其次是已注册的 `chat`，否则不渲染 View；绝不选择第一个已注册 View。Shell phase 只组合 Session lifecycle 与 active-target set，不读取任何 target-specific snapshot。
 
 Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染前读取持久化 View 偏好，激活已注册的偏好 View 或 Chat fallback，并在后续 tab 或 focus 选择写入 store 前先激活对应 target。blank Session 仍不渲染 `conversation.view` slot；未选中的 target 不会激活。

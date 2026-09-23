@@ -514,6 +514,7 @@ describe('host face', () => {
     const adapter = {
       current: { getSnapshot: () => absent, subscribe: () => () => undefined },
       resolve: () => undefined,
+      subscribe: () => () => {},
     }
     const changed = vi.fn()
     host.scopeRevision.subscribe(changed)
@@ -664,6 +665,7 @@ describe('store instance axis', () => {
         subscribe: () => () => undefined,
       },
       resolve: () => undefined,
+      subscribe: () => () => {},
     })
     const { handle, created } = fakeHandle()
     bench.erased.register({ name: 't.maybe', store: handle }, C)

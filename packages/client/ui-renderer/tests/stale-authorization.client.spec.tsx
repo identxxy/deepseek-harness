@@ -34,6 +34,7 @@ function makeHost() {
     subscribe: () => () => {},
   }
   const sessionAdapter: SlotScopeAdapter = {
+    subscribe: () => () => {},
     current: bindingSource,
     resolve: () => undefined,
   }

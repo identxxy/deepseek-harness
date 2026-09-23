@@ -1,0 +1,150 @@
+- text: Agent Restore Agent A
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
+- banner:
+  - navigation "Session hierarchy":
+    - button "Restore Agent A" [disabled]
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- button "System prompt":
+  - img
+  - img
+  - text: System prompt
+- text: Restore Agent A print exactly NAVIGATION_OK, then read nav-a.md and nav-b.md using two read calls in ONE assistant message, then reply with the single word AGENT_A_OK and stop. 7/26 {{clock}}
+- button "Copy":
+  - img
+- button "3 tool calls":
+  - text: 3 tool calls
+  - img
+- paragraph: AGENT_A_OK
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: "7/26 {{clock}} Reply in markdown with: a level-2 heading \"Navigation Summary\", a bulleted list of exactly two items, and a fenced code block containing echo WATERFALL. Then stop. 7/26 {{clock}}"
+- button "Copy":
+  - img
+- button "Thought for a while":
+  - text: Thought for a while
+  - img
+- heading "Navigation Summary" [level=2]
+- list:
+  - listitem: alpha nav
+  - listitem: beta nav
+- button "Copy"
+- code: echo WATERFALL
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: 7/26 {{clock}}
+- textbox "Message or run a task... / commands, @ files or sessions"
+- button "Commands":
+  - img
+- button "Add attachment":
+  - img
+- button "More options"
+- button "Send message" [disabled]
+- text: Agent Restore Agent B
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
+- banner:
+  - navigation "Session hierarchy":
+    - button "Restore Agent B" [disabled]
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- button "System prompt":
+  - img
+  - img
+  - text: System prompt
+- text: Restore Agent B print exactly NAVIGATION_OK, then read nav-a.md and nav-b.md using two read calls in ONE assistant message, then reply with the single word AGENT_B_OK and stop. 7/26 {{clock}}
+- button "Copy":
+  - img
+- button "3 tool calls":
+  - text: 3 tool calls
+  - img
+- paragraph: AGENT_B_OK
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: "7/26 {{clock}} Reply in markdown with: a level-2 heading \"Navigation Summary\", a bulleted list of exactly two items, and a fenced code block containing echo WATERFALL. Then stop. 7/26 {{clock}}"
+- button "Copy":
+  - img
+- button "Thought for a while":
+  - text: Thought for a while
+  - img
+- heading "Navigation Summary" [level=2]
+- list:
+  - listitem: alpha nav
+  - listitem: beta nav
+- button "Copy"
+- code: echo WATERFALL
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: 7/26 {{clock}}
+- textbox "Message or run a task... / commands, @ files or sessions"
+- button "Commands":
+  - img
+- button "Add attachment":
+  - img
+- button "More options"
+- button "Send message" [disabled]
+- button "Back to Kitty windows":
+  - img
+- text: "#1 · Alpha terminal"
+- button "Split right": ⇥
+- button "Split down": ⇲
+- button "Close pane": ×
+- main: "ALPHA_SCREEN_READY $ pwd /workspace/example Ready · terminal connected 第一行：检查终端输出 第二行：继续当前会话 Third line: continue working."
+- contentinfo:
+  - button "Attach image":
+    - img
+  - button "Terminal keys":
+    - img
+  - textbox "Text for the selected terminal":
+    - /placeholder: Message this terminal…
+  - checkbox "Append newline" [checked]
+  - text: Append newline
+  - button "Send":
+    - img

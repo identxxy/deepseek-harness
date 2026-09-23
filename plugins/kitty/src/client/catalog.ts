@@ -1,8 +1,11 @@
 /** Authenticated Kitty requests and the shared, replaceable window catalog. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
+import type { Branded } from '@deepseek-ai/dsh-brand';
 
+/** Stable window identity for restoration; it cannot authorize terminal operations. */
+export type KittyWindowId = Branded<'KittyWindowId'>;
 /** Window metadata and the Host-issued token for its current foreground process. */
-export interface Pane { instance: string; token: string; id: number; title: string; cwd: string; program: string; pid: number }
+export interface Pane { windowId: KittyWindowId; instance: string; token: string; id: number; title: string; cwd: string; program: string; pid: number }
 /** Authenticated catalog response, including Host-configured Client limits. */
 export interface KittyList {
   panes: Pane[];

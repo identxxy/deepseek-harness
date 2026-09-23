@@ -36,6 +36,7 @@ async function bench() {
     subscribe: () => () => {},
   }
   const adapter: SlotScopeAdapter = {
+    subscribe: () => () => {},
     current,
     resolve: () => undefined,
   }

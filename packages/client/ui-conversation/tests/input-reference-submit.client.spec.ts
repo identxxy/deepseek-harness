@@ -33,6 +33,20 @@ function chip(shell: SessionInputShell): void {
 }
 
 describe('reference submission', () => {
+  it('keeps duplicate draft mirror leases independent when one pane closes', () => {
+    const shell = new SessionInputShell({ actx: {} as Context, defaultSink: vi.fn(), commandAttachments })
+    const mirror = vi.fn()
+    const offFirst = shell.bindMirror(mirror)
+    const offSecond = shell.bindMirror(mirror)
+    offFirst()
+    shell.setDraft('remaining pane')
+    expect(mirror).toHaveBeenLastCalledWith('remaining pane')
+    offSecond()
+    mirror.mockClear()
+    shell.setDraft('detached')
+    expect(mirror).not.toHaveBeenCalled()
+  })
+
   it('mirrors canonical reference text so a persisted draft remains resolvable after remount', async () => {
     const mirror = vi.fn()
     const first = new SessionInputShell({

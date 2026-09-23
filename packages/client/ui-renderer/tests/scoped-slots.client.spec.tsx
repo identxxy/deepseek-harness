@@ -113,6 +113,7 @@ function makeHost() {
     props: {},
   })
   const sessionAdapter: SlotScopeAdapter = {
+    subscribe: () => () => {},
     current: currentBinding,
     resolve: key => bindings.get(key),
     renderArea: (binding, { empty, children }) => binding.key === undefined
@@ -1142,6 +1143,7 @@ describe('session-maybe adoption identity', () => {
     act(() => {
       h.replaceScope({
         current: observable(binding),
+        subscribe: () => () => {},
         resolve: key => key === binding.key ? binding : undefined,
       })
     })

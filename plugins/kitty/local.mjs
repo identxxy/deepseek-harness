@@ -4,7 +4,7 @@ import { join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 
 export function resolveConfig(value = {}) {
-  const config = { binary: 'kitty', socketDirectory: '/tmp', socketPrefix: 'kitty.sock-', timeoutMs: 20_000, graceMs: 500, maxOutputBytes: 4 * 1024 * 1024, maxTextBytes: 128 * 1024, maxImageBytes: 8 * 1024 * 1024, maxQueuedActions: 16, pollIntervalMs: 5000, scrollDebounceMs: 70, scrollPixelsPerLine: 42, touchScrollSensitivity: 5, maxScrollLines: 80, previewMaxBytes: 64 * 1024 * 1024, previewMaxResources: 64, imageDirectory: join(homedir(), 'Pictures', 'voxpress'), ...value };
+  const config = { binary: 'kitty', socketDirectory: '/tmp', socketPrefix: 'kitty.sock-', timeoutMs: 20_000, graceMs: 500, maxOutputBytes: 4 * 1024 * 1024, maxTextBytes: 128 * 1024, maxImageBytes: 8 * 1024 * 1024, maxQueuedActions: 16, pollIntervalMs: 5000, scrollDebounceMs: 70, scrollPixelsPerLine: 42, touchScrollSensitivity: 5, maxScrollLines: 80, previewMaxBytes: 64 * 1024 * 1024, previewMaxResources: 64, previewAssetDirectories: [], imageDirectory: join(homedir(), 'Pictures', 'voxpress'), ...value };
   for (const key of ['timeoutMs', 'graceMs', 'maxOutputBytes', 'maxTextBytes', 'maxImageBytes', 'maxQueuedActions', 'pollIntervalMs', 'scrollDebounceMs', 'maxScrollLines', 'previewMaxBytes', 'previewMaxResources']) {
     if (!Number.isSafeInteger(config[key]) || config[key] < 1) throw new Error(`Invalid Kitty configuration: ${key}`);
   }
@@ -12,6 +12,7 @@ export function resolveConfig(value = {}) {
     if (!Number.isFinite(config[key]) || config[key] <= 0) throw new Error(`Invalid Kitty configuration: ${key}`);
   }
   for (const key of ['socketDirectory', 'imageDirectory']) if (typeof config[key] !== 'string' || !isAbsolute(config[key])) throw new Error(`Kitty ${key} must be absolute`);
+  if (!Array.isArray(config.previewAssetDirectories) || config.previewAssetDirectories.some(path => typeof path !== 'string' || !isAbsolute(path))) throw new Error('Kitty previewAssetDirectories must contain absolute directories');
   if (typeof config.binary !== 'string' || !config.binary || typeof config.socketPrefix !== 'string' || !config.socketPrefix || config.socketPrefix.includes('/')) throw new Error('Invalid Kitty binary or socket prefix');
   return config;
 }
@@ -44,6 +45,7 @@ export function createLocal(ctx, config) {
   }
   async function discover() {
     const result = [];
+    const bootId = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
     const entries = await readdir(config.socketDirectory);
     for (const name of entries.filter(name => name.startsWith(config.socketPrefix)).sort()) {
       const socket = join(config.socketDirectory, name);
@@ -62,7 +64,8 @@ export function createLocal(ctx, config) {
           if (error.code === 'ENOENT' || error.code === 'ESRCH') continue; // The process exited during discovery.
           throw error;
         }
-        result.push({ socket, inode: `${info.dev}:${info.ino}`, id: pane.id, created: pane.created_at, processes: JSON.stringify(identities.sort((a, b) => a[0] - b[0])), title: pane.title, cwd: pane.foreground_processes[0]?.cwd ?? pane.cwd, program: pane.foreground_processes.map(p => p.cmdline[0]).join(', '), pid: pane.foreground_processes[0]?.pid ?? pane.pid });
+        const rootProcess = identities[0];
+        result.push({ bootId, rootProcess, socket, inode: `${info.dev}:${info.ino}`, id: pane.id, created: pane.created_at, processes: JSON.stringify(identities.sort((a, b) => a[0] - b[0])), title: pane.title, cwd: pane.foreground_processes[0]?.cwd ?? pane.cwd, program: pane.foreground_processes.map(p => p.cmdline[0]).join(', '), pid: pane.foreground_processes[0]?.pid ?? pane.pid });
       }
     }
     return result;

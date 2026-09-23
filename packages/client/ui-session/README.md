@@ -8,7 +8,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-React and Slot adapter for Session Controller state. It contributes Session list and pending-interaction hooks at root scope, materializes per-Session hooks and props, and owns the standard `SessionProvider` rendering behavior without taking ownership of Session transport or lifecycle state. Use it when a browser feature needs Session state through standard React props and hooks.
+React and Slot adapter for Session Controller state. It contributes Session list and pending-interaction hooks at root scope, materializes per-Session hooks and props, and owns the standard `SessionProvider` rendering behavior without taking ownership of Session transport or lifecycle state. Use it when a browser feature needs Session state through standard React props and hooks. Its adapter separately publishes changes to any Session binding, including late catalog availability, source-contribution rebuilds and non-current Session release, so explicit areas stay reactive independently of global selection.
 
 ## Table of Contents
 

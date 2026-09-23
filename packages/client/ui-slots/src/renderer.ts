@@ -97,6 +97,12 @@ export interface SlotScopeAdapter {
    */
   resolve(key: string): ScopedStandardSourceBinding | undefined
   /**
+   * Subscribe to availability, replacement or release of any resolvable binding.
+   * @param listener - callback that rereads the required identity through `resolve`.
+   * @returns disposer that removes this subscription.
+   */
+  subscribe(listener: () => void): () => void
+  /**
    * Render the scope owner's area seat over the current binding. The renderer
    * binds this function to the standard `SessionProvider` prop without owning
    * Session selection semantics.

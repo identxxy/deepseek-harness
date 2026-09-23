@@ -46,8 +46,11 @@ export const InputBar = memo(function InputBar({
   renderSlot, useFileUploads, useNotices, useLexicon, useMenuLauncher,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
-  placeholder, accessory,
+  placeholder, accessory, compact: compactInput = false, active = true,
 }: InputBarProps) {
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const compact = compactInput && variant === 'composer'
+  const showOptions = !compact || optionsOpen || blocked !== undefined
   const input = useInput(s => s)
   const notice = useNotices(s => s)
   void useLexicon // hook seat stays bound by the inject compartment; text-ref decoration rides the shell's editor transforms
@@ -65,7 +68,7 @@ export const InputBar = memo(function InputBar({
   // current; the bar renders the same DOM inert instead of a parallel tree.
   const live = input !== undefined && keyboard !== undefined && inputActions !== undefined
   const draft = input?.draft ?? ''
-  const editor = keyboard?.editor ?? null
+  const editor = active ? keyboard?.editor ?? null : null
   const attachments = useMemo(
     () => input === undefined || resolveDraftAttachments === undefined ? [] : resolveDraftAttachments(input.attachmentIds),
     [resolveDraftAttachments, input?.attachmentIds],
@@ -193,7 +196,7 @@ export const InputBar = memo(function InputBar({
   // not focus: send-clear, failed-send restore, and first-character transitions
   // must not steal focus from another control the user moved to.
   useEffect(() => {
-    if (locked || draft === '') return
+    if (!active || locked || draft === '') return
     revealSelection()
   }, [draft !== ''])
 
@@ -384,8 +387,21 @@ export const InputBar = memo(function InputBar({
         ? t('placeholder.steerQueue')
         : planActive ? t('placeholder.plan') : t('placeholder.default'))
 
+  const modeControls = showOptions ? <>
+    <div className={css.modes}>
+      {accessSelect}
+      {sessionId === undefined ? null : renderSlot('conversation.input.plan', { locked })}
+    </div>
+    {input === undefined || sessionId === undefined ? null : renderSlot('conversation.input.left', {})}
+  </> : null
+  const extraControls = showOptions ? <>
+    {input === undefined || sessionId === undefined ? null : renderSlot('conversation.input.right', {})}
+    {sessionId === undefined ? null : renderSlot('conversation.input.model', { locked: modelSeatLocked })}
+    <ContextMeter useProjection={useProjection} t={t} />
+  </> : null
+
   return (
-    <div className={clsx(css.root, variant === 'hero' && css.hero)}>
+    <div className={clsx(css.root, compact && css.compactRoot, variant === 'hero' && css.hero)}>
       {toast !== null && (
         <Toast
           key={toast.seq}
@@ -407,8 +423,18 @@ export const InputBar = memo(function InputBar({
           click's reopen (close-then-open flickers the chip's open echo). */}
       <div
         ref={cardRef}
-        className={clsx(css.card, workspaceTrigger && css.cardWorkspaceTrigger)}
+        className={clsx(css.card, compact && css.compact, workspaceTrigger && css.cardWorkspaceTrigger)}
         data-composer-card
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = canAcceptDrop ? 'copy' : 'none'
+        }}
+        onDrop={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return
+          event.preventDefault()
+          if (canAcceptDrop) intakeFiles([...event.dataTransfer.files])
+        }}
         onClick={workspaceTrigger ? onRequestWorkspace : undefined}
         onPointerDown={workspaceTrigger ? (e) => { e.stopPropagation() } : undefined}
       >
@@ -416,9 +442,10 @@ export const InputBar = memo(function InputBar({
           <div className={css.overlayAnchor}>{renderSlot('conversation.input.overlay', {})}</div>
         )}
         {accessory !== undefined && <div className={css.accessory}>{accessory}</div>}
-        {renderSlot('conversation.input.attachments', {
+        <div className={css.attachments}>{renderSlot('conversation.input.attachments', {
           attachments,
           canAcceptDrop,
+          documentDrop: active,
           onAddFiles: intakeFiles,
           onRemoveAttachment: (id) => { removeAttachment?.(id) },
           uploads,
@@ -427,7 +454,7 @@ export const InputBar = memo(function InputBar({
             count: imageLimits.maxImagesPerMessage,
             size: imageSizeText(imageLimits.maxImageBytes),
           },
-        })}
+        })}</div>
         {/* One scrollport, one text surface: the contenteditable grows with
             its content and .scroll — capped at 14 lines in CSS — is the only
             thing that scrolls. Chips are decorator portals inside the same
@@ -435,7 +462,19 @@ export const InputBar = memo(function InputBar({
             browser's own. */}
         <div ref={scrollRef} className={css.scroll} data-input-scroll>
           <div className={css.grow}>
-            <ComposerContentEditable
+            {!active && !workspaceTrigger ? (
+              <div
+                className={clsx(css.input, editorDisabled && css.inputDisabled)}
+                role="textbox"
+                aria-multiline="true"
+                aria-readonly="true"
+                aria-label={placeholderText}
+                aria-disabled={editorDisabled || undefined}
+                data-composer-input
+                data-phase={input?.phase ?? 'inert'}
+                tabIndex={0}
+              >{draft || '\u00a0'}</div>
+            ) : <ComposerContentEditable
               editor={workspaceTrigger ? null : editor}
               editable={editable}
               className={clsx(css.input, editorDisabled && css.inputDisabled)}
@@ -450,7 +489,7 @@ export const InputBar = memo(function InputBar({
               tabIndex={workspaceTrigger ? 0 : undefined}
               onKeyDown={workspaceTrigger ? onWorkspaceKeyDown : undefined}
               style={hint === null ? undefined : { '--dsh-composer-hint': JSON.stringify(hint) } as CSSProperties}
-            />
+            />}
             {empty && !claimActive && (
               <div aria-hidden className={css.placeholder} data-composer-placeholder>
                 {placeholderText}
@@ -495,20 +534,27 @@ export const InputBar = memo(function InputBar({
               hidden
               onChange={onPickFiles}
             />
-            <div className={css.modes}>
-              {accessSelect}
-              {sessionId === undefined ? null : renderSlot('conversation.input.plan', { locked })}
-            </div>
-            {input === undefined || sessionId === undefined
-              ? null
-              : renderSlot('conversation.input.left', {})}
+            {compact && (
+              <Tooltip label={t('input.moreOptions')} side="top" delayMs={500}>
+                <button
+                  type="button"
+                  className={css.add}
+                  aria-label={t('input.moreOptions')}
+                  aria-expanded={showOptions}
+                  onClick={() => { setOptionsOpen(value => !value) }}
+                >
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+                    <circle cx="3" cy="8" r="1.25" fill="currentColor" />
+                    <circle cx="8" cy="8" r="1.25" fill="currentColor" />
+                    <circle cx="13" cy="8" r="1.25" fill="currentColor" />
+                  </svg>
+                </button>
+              </Tooltip>
+            )}
+            {!compact && modeControls}
           </div>
           <div className={css.trailing}>
-            {input === undefined || sessionId === undefined
-              ? null
-              : renderSlot('conversation.input.right', {})}
-            {sessionId === undefined ? null : renderSlot('conversation.input.model', { locked: modelSeatLocked })}
-            <ContextMeter useProjection={useProjection} t={t} />
+            {!compact && extraControls}
             {interruptible && (
               <Tooltip label={t('input.stop')} side="top" delayMs={500}>
                 <button
@@ -547,8 +593,14 @@ export const InputBar = memo(function InputBar({
             </Tooltip>
           </div>
         </div>
+        {compact && showOptions && (
+          <div className={css.options}>
+            {modeControls}
+            <div className={css.trailing}>{extraControls}</div>
+          </div>
+        )}
       </div>
-      {variant === 'composer' && input !== undefined && sessionId !== undefined
+      {variant === 'composer' && showOptions && input !== undefined && sessionId !== undefined
         ? renderSlot('conversation.composer.dock', {})
         : null}
     </div>

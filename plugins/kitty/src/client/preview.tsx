@@ -14,9 +14,10 @@ interface Page { url: string; scope: string; html: string; }
 interface Resource { url: string; contentType: string; data: string; status: number; }
 const HISTORY_KEY = '__dshKittyPreview';
 
-function failureKey(error: unknown): 'browserFailed' | 'browserTooLarge' | 'browserNotFound' | 'browserUnavailable' {
+function failureKey(error: unknown): 'browserFailed' | 'browserTooLarge' | 'browserNotFound' | 'browserUnavailable' | 'browserForbidden' {
   if (error instanceof Error && error.message === 'preview_too_large') return 'browserTooLarge';
   if (error instanceof Error && error.message === 'preview_not_found') return 'browserNotFound';
+  if (error instanceof Error && error.message === 'preview_scope_forbidden') return 'browserForbidden';
   if (error instanceof Error && error.message === 'kitty_endpoint_unavailable') return 'browserUnavailable';
   return 'browserFailed';
 }

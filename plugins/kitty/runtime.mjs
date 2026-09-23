@@ -1,5 +1,5 @@
 /** Identity-checked operations on existing Kitty panes. */
-import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -13,6 +13,7 @@ export function createRuntime({ discover, command, config }) {
   const queues = new Map();
   let queued = 0;
   const instance = p => createHmac('sha256', secret).update(JSON.stringify([p.socket, p.inode])).digest('hex');
+  const windowId = p => createHash('sha256').update(JSON.stringify([p.bootId, p.socket, p.inode, p.id, p.created, p.rootProcess])).digest('hex');
   const token = p => createHmac('sha256', secret).update(JSON.stringify([p.socket, p.inode, p.id, p.created, p.processes])).digest('hex');
   async function resolve(value) {
     if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw new Error('invalid_target');
@@ -21,7 +22,7 @@ export function createRuntime({ discover, command, config }) {
     return pane;
   }
   async function list() {
-    return (await discover()).map(p => ({ token: token(p), instance: instance(p), id: p.id, title: p.title, cwd: p.cwd, program: p.program, pid: p.pid }));
+    return (await discover()).map(p => ({ windowId: windowId(p), token: token(p), instance: instance(p), id: p.id, title: p.title, cwd: p.cwd, program: p.program, pid: p.pid }));
   }
   async function screen(value, extent = 'screen') {
     if (!['screen', 'all'].includes(extent)) throw new Error('invalid_extent');

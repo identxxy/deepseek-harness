@@ -60,6 +60,8 @@ export interface ComposerAttachmentsOwnerProps {
   attachments: readonly ComposerAttachment[]
   /** Whether a document-level file drop may add attachments now. */
   canAcceptDrop: boolean
+  /** Capture document drops only for the focused input owner; defaults to true. */
+  documentDrop?: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddFiles: (files: readonly File[]) => void
   /** Remove one draft attachment through the Conversation service. */
@@ -270,6 +272,10 @@ export interface ConversationSessionHeaderInjected {
 export interface ComposerBarOwnerProps {
   /** Hero uses centered placement; composer uses the active bottom placement. */
   variant: 'hero' | 'composer'
+  /** Keep a pane-local composer on one row until its extra options are opened. */
+  compact?: boolean
+  /** Bind the Session editor and document intake only while focused; defaults to true. */
+  active?: boolean
   /** A feature-owned reason that makes message input inert while leaving model selection live. */
   blocked?: { readonly reason: string }
   /** Lock all message actions while preserving the resident composer surface. */

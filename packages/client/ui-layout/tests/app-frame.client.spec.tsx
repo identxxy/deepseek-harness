@@ -63,6 +63,7 @@ function mountFrame(options: {
   setupLayout?: (actions: LayoutActions) => void
   locale?: typeof en
   sessionUnavailable?: boolean
+  sessionsPhase?: { current: SessionListState['phase'] }
 } = {}) {
   window.innerWidth = frameWidth // first-render viewport source before the observer fires
   const instance = createLayoutStore().create()
@@ -71,10 +72,10 @@ function mountFrame(options: {
   const renderSlot = ((key: string, owner: object) => {
     slotCalls.push({ key, props: owner })
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
-    if (key === 'conversation') return <header data-testid="center-content" />
+    if (key === 'conversation') return <header data-testid="center-content" tabIndex={0} />
     if (key === 'details') return <div data-testid="details-content" />
     if (key === 'workspace.console') return <div data-testid="console-content" data-console-id={(owner as { actor: { id: string } }).actor.id} />
-    if (key === 'workspace.panel.composer') return <footer data-testid="plugin-composer" data-pane-id={(owner as { paneId: string }).paneId} />
+    if (key === 'workspace.panel') return <div data-testid="plugin-content" data-pane-id={(owner as { paneId: string }).paneId} />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
@@ -105,7 +106,7 @@ function mountFrame(options: {
         ...(id === current && selectedSessionTitle.current !== undefined ? { title: selectedSessionTitle.current } : {}),
       }])),
       current,
-      phase: 'ready',
+      phase: options.sessionsPhase?.current ?? 'ready',
     } as SessionListState
     const useSessions = ((sel: (s: SessionListState) => unknown) => sel(sessionState)) as never
     return (
@@ -250,7 +251,7 @@ describe('AppFrame', () => {
   })
 
   it('renders an addressed Agent and Human Terminal in independent desktop panes', () => {
-    const { instance, getByTestId, getByRole, container } = mountFrame({
+    const { instance, getByTestId, getByRole, container, slotCalls } = mountFrame({
       availableSessionIds: ['s-agent' as SessionId],
     })
     act(() => {
@@ -265,6 +266,10 @@ describe('AppFrame', () => {
     expect(getByRole('banner')).toBe(getByTestId('center-content'))
     expect(container.querySelector('[data-actor-pane]')?.tagName).toBe('DIV')
     expect(container.querySelector('[class*="paneHeader"]')?.tagName).toBe('DIV')
+    expect(slotCalls.filter(call => call.key === 'conversation').at(-1)?.props).toEqual({ compactInput: true, active: false })
+    act(() => { getByTestId('center-content').focus() })
+    expect(instance.getSnapshot().activePaneId).toBe('pane-agent')
+    expect(slotCalls.filter(call => call.key === 'conversation').at(-1)?.props).toEqual({ compactInput: true, active: true })
   })
 
   it('renders pane chrome in the active locale', () => {
@@ -316,6 +321,44 @@ describe('AppFrame', () => {
       actor: { kind: 'console', id: 'c-restored' },
     })
     expect(restored.instance.getSnapshot().activePaneId).toBe('pane-console')
+  })
+
+  it.each([
+    { kind: 'panel', id: 'Kitty' },
+    { kind: 'console', id: 'c-restored' },
+    { kind: 'agent', id: 's-two' },
+  ] as const)('preserves restored panes when the first ready Session baseline arrives with active $kind', (activeActor) => {
+    selectedSession.current = undefined
+    const first = mountFrame({ availableSessionIds: ['s-one' as SessionId, 's-two' as SessionId] })
+    act(() => {
+      first.instance.actions.openActor({ kind: 'agent', id: 's-one' }, 'pane-one')
+      first.instance.actions.splitActor({ kind: 'agent', id: 's-two' }, 'horizontal', 'split-agents', 'pane-two')
+      first.instance.actions.splitActor(activeActor, 'vertical', 'split-active', 'pane-active')
+    })
+    const saved = first.instance.getSnapshot()
+    first.unmount()
+
+    selectedSession.current = undefined
+    const sessionsPhase = { current: 'pending' as SessionListState['phase'] }
+    const restored = mountFrame({ sessionsPhase })
+    expect(restored.instance.getSnapshot().paneRoot).toEqual(saved.paneRoot)
+
+    selectedSession.current = 's-old-global' as SessionId
+    sessionsPhase.current = 'ready'
+    act(() => { restored.rerenderFrame() })
+    expect(restored.instance.getSnapshot().paneRoot).toEqual(saved.paneRoot)
+    expect(restored.instance.getSnapshot().activePaneId).toBe('pane-active')
+
+    selectedSession.current = 's-external' as SessionId
+    act(() => { restored.rerenderFrame() })
+    expect(restored.instance.getSnapshot().paneRoot).toMatchObject({
+      first: { id: 'pane-one', actor: { kind: 'agent', id: 's-one' } },
+      second: {
+        first: { id: 'pane-two', actor: { kind: 'agent', id: 's-two' } },
+        second: { id: 'pane-active', actor: { kind: 'agent', id: 's-external' } },
+      },
+    })
+    expect(restored.instance.getSnapshot().activePaneId).toBe('pane-active')
   })
 
   it('drops a restored Agent pane that is absent from the ready Session catalog', () => {
@@ -549,6 +592,32 @@ describe('AppFrame — single-pane mobile navigation', () => {
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
   })
 
+  it.each([
+    { history: null, view: 'conversation', sidebarPage: null },
+    { history: { __dshMobileView: 'sessions' }, view: 'sessions', sidebarPage: null },
+    { history: { __dshMobileView: 'sessions', __dshSidebarPage: 'kitty' }, view: 'sessions', sidebarPage: 'kitty' },
+  ])('restores a mobile Kitty split to $view with History $history', ({ history, view, sidebarPage }) => {
+    selectedSession.current = undefined
+    const desktop = mountFrame()
+    act(() => {
+      desktop.instance.actions.openActor({ kind: 'panel', id: 'Kitty' }, 'pane-one')
+      desktop.instance.actions.splitActor({ kind: 'panel', id: 'Kitty' }, 'horizontal', 'split-kitty', 'pane-two')
+    })
+    const saved = desktop.instance.getSnapshot()
+    desktop.unmount()
+
+    frameWidth = 390
+    window.history.replaceState(history, '', '/')
+    const restored = mountFrame({ sessionsPhase: { current: 'pending' } })
+    expect(restored.frame.dataset.mobileView).toBe(view)
+    expect(tracks(restored.frame)).toEqual([view === 'conversation' ? 0 : 390, 0])
+    expect(restored.instance.getSnapshot().paneRoot).toEqual(saved.paneRoot)
+    expect(restored.instance.getSnapshot().activePaneId).toBe('pane-two')
+    expect(restored.instance.getSnapshot().sidebarPage).toBe(sidebarPage)
+    expect(restored.container.querySelectorAll('[data-actor-pane]')).toHaveLength(1)
+    expect(restored.container.querySelector('[data-actor-pane]')?.getAttribute('data-actor-pane')).toBe('pane-two')
+  })
+
   it('starts at the full-width Session list when no Session is selected', () => {
     frameWidth = 980
     selectedSession.current = undefined
@@ -710,19 +779,18 @@ it('opens plugin content in the native canvas without staging an Agent or mounti
   expect(frame.queryByTestId('console-content')).toBeNull()
   expect(frame.container.querySelector('[data-actor-kind="panel"]')).not.toBeNull()
   expect(frame.slotCalls.filter(call => call.key === 'sidebar').at(-1)!.props).toMatchObject({ activePaneId: 'pane-kitty' })
-  expect(frame.getAllByTestId('plugin-composer')).toHaveLength(1)
-  expect(frame.getByTestId('plugin-composer').closest('[data-actor-pane]')).toBeNull()
+  expect(frame.getAllByTestId('plugin-content')).toHaveLength(1)
+  expect(frame.getByTestId('plugin-content').closest('[data-actor-pane]')?.getAttribute('data-actor-pane')).toBe('pane-kitty')
   act(() => { frame.instance.actions.splitActor({ kind: 'panel', id: 'Kitty' }, 'horizontal', 'split-kitty', 'pane-second') })
   expect(frame.slotCalls.filter(call => call.key === 'sidebar').at(-1)!.props).toMatchObject({ activePaneId: 'pane-second' })
-  expect(frame.getAllByTestId('plugin-composer')).toHaveLength(1)
-  expect(frame.getByTestId('plugin-composer').getAttribute('data-pane-id')).toBe('pane-second')
+  expect(frame.getAllByTestId('plugin-content').map(element => element.getAttribute('data-pane-id'))).toEqual(['pane-kitty', 'pane-second'])
   act(() => { frame.instance.actions.focusPane('pane-kitty') })
   expect(frame.slotCalls.filter(call => call.key === 'sidebar').at(-1)!.props).toMatchObject({ activePaneId: 'pane-kitty' })
-  expect(frame.getByTestId('plugin-composer').getAttribute('data-pane-id')).toBe('pane-kitty')
+  expect(frame.getAllByTestId('plugin-content')).toHaveLength(2)
   act(() => { frame.instance.actions.openActor({ kind: 'console', id: 'console-one' }, 'unused-pane') })
-  expect(frame.queryByTestId('plugin-composer')).toBeNull()
+  expect(frame.getAllByTestId('plugin-content')).toHaveLength(1)
   act(() => { frame.instance.actions.focusPane('pane-second') })
-  expect(frame.getByTestId('plugin-composer').getAttribute('data-pane-id')).toBe('pane-second')
+  expect(frame.getByTestId('plugin-content').getAttribute('data-pane-id')).toBe('pane-second')
   act(() => { frame.instance.actions.closeActorPane('pane-second') })
-  expect(frame.queryByTestId('plugin-composer')).toBeNull()
+  expect(frame.queryByTestId('plugin-content')).toBeNull()
 })

@@ -217,6 +217,7 @@ export class UiSession extends Service {
   private bindings = new Map<SessionId, MaterializedBinding>()
   private absent: StandardSourceBinding
   private currentBinding: StandardSourceBinding
+  private readonly bindingListeners = new Set<() => void>()
   private readonly currentListeners = new Set<() => void>()
   private readonly pendingDomains: RuntimePendingDomain[] = []
   private pendingSnapshot: ReadonlyMap<SessionId, SessionPendingInteractionBase> = new Map()
@@ -252,13 +253,22 @@ export class UiSession extends Service {
         },
       },
       resolve: key => this.resolve(key as SessionId),
+      subscribe: (listener) => {
+        this.bindingListeners.add(listener)
+        return () => { this.bindingListeners.delete(listener) }
+      },
       renderArea: renderSessionArea,
     }
 
     ctx.effect(() => {
-      const disposeList = sessions.list.subscribe(() => { this.publishCurrent() })
+      const disposeList = sessions.list.subscribe(() => {
+        this.publishCurrent()
+        this.publishBindings()
+      })
       return () => {
         disposeList()
+        this.bindingListeners.clear()
+        this.currentListeners.clear()
         const records = [...this.bindings.values()]
         this.bindings.clear()
         for (const record of records) record.release()
@@ -338,6 +348,7 @@ export class UiSession extends Service {
     this.bindings = bindings
     for (const record of previous.values()) record.release()
     this.publishCurrent()
+    this.publishBindings()
   }
 
   private resolve(key: SessionId): ScopedStandardSourceBinding | undefined {
@@ -361,6 +372,10 @@ export class UiSession extends Service {
     if (next === this.currentBinding) return
     this.currentBinding = next
     notifySubscribers(this.currentListeners, '[ui-session] current binding')
+  }
+
+  private publishBindings(): void {
+    notifySubscribers(this.bindingListeners, '[ui-session] bindings')
   }
 
   private publishPendingInteractions(): void {
@@ -390,9 +405,11 @@ export class UiSession extends Service {
     const releaseEffect = owner.ctx.effect(() => () => {
       if (this.bindings.get(owner.sessionId) !== record) return
       this.bindings.delete(owner.sessionId)
-      if (this.currentBinding !== value) return
-      this.currentBinding = this.absent
-      notifySubscribers(this.currentListeners, '[ui-session] current binding')
+      if (this.currentBinding === value) {
+        this.currentBinding = this.absent
+        notifySubscribers(this.currentListeners, '[ui-session] current binding')
+      }
+      this.publishBindings()
     }, `ui-session: binding ${owner.sessionId}`)
     const record: MaterializedBinding = {
       owner,

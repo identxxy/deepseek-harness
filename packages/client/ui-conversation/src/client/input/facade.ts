@@ -153,7 +153,7 @@ export class SessionInputShell implements SessionInput {
   private attachmentIds: readonly DraftAttachmentId[] = []
   private disposed = false
   /** Draft persistence mirror (Conversation store write; receives the clipboard projection). */
-  private mirrorFn: ((text: string) => void) | undefined
+  private readonly mirrors = new Set<{ write: (text: string) => void }>()
   /** Live lexicon subscription disposer; undefined until the controller resolves. */
   private lexiconOff: (() => void) | undefined
   /** Default sends retained until admission settles or scope disposal releases their attachments. */
@@ -598,13 +598,12 @@ export class SessionInputShell implements SessionInput {
    * seeds it via setDraft BEFORE binding, and afterwards every editor-adopted
    * draft mirrors out.
    * @param write - store draft write.
-   * @returns the unbind disposer.
+   * @returns the disposer for this binding; other mounted panes keep their mirrors.
    */
   bindMirror(write: (text: string) => void): () => void {
-    this.mirrorFn = write
-    return () => {
-      if (this.mirrorFn === write) this.mirrorFn = undefined
-    }
+    const lease = { write }
+    this.mirrors.add(lease)
+    return () => { this.mirrors.delete(lease) }
   }
 
   // ---- effect executor ----
@@ -918,7 +917,7 @@ export class SessionInputShell implements SessionInput {
     this.state.set(next)
     if (next.draft !== this.lastMirroredDraft) {
       this.lastMirroredDraft = next.draft
-      this.mirrorFn?.(next.draft)
+      for (const mirror of this.mirrors) mirror.write(next.draft)
     }
   }
 }

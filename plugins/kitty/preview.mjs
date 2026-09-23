@@ -1,4 +1,4 @@
-/** Bounded report reads restricted to an authenticated user's selected directory or HTTP origin. */
+/** Bounded report reads with selected navigation and configured static asset directories. */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { constants } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
@@ -46,6 +46,7 @@ export function createPreview(config) {
     const initial = reportUrl(input.url);
     if (input.resource && input.scope === undefined) throw new Error('preview_scope_forbidden');
     let scope;
+    let assetDirectories;
     const deadline = performance.now() + config.timeoutMs;
     const signal = AbortSignal.any([closing.signal, AbortSignal.timeout(config.timeoutMs), ...(requestSignal ? [requestSignal] : [])]);
     let bytes = 0;
@@ -56,7 +57,7 @@ export function createPreview(config) {
       if (bytes > config.previewMaxBytes) throw new Error('preview_too_large');
       signal.throwIfAborted();
     }
-    async function read(target, redirects = new Set()) {
+    async function read(target, redirects = new Set(), asset = false) {
       signal.throwIfAborted();
       const url = reportUrl(target);
       url.hash = '';
@@ -66,15 +67,17 @@ export function createPreview(config) {
       const task = (async () => {
         if (scope.kind === 'file') {
           if (url.protocol !== 'file:') throw new Error('preview_scope_forbidden');
+          if (asset) assetDirectories ??= await Promise.all(config.previewAssetDirectories.map(directory => realpath(directory)));
+          const allowed = path => inside(scope.directory, path) || (asset && assetDirectories.some(directory => inside(directory, path)));
           let path = await realpath(fileURLToPath(url));
-          if (!inside(scope.directory, path)) throw new Error('preview_scope_forbidden');
+          if (!allowed(path)) throw new Error('preview_scope_forbidden');
           const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
           try {
             const stat = await file.stat();
             if (!stat.isFile()) throw new Error('preview_not_a_file');
             // Linux fd resolution checks the opened file even if a parent directory was replaced.
             path = await realpath(`/proc/self/fd/${file.fd}`);
-            if (!inside(scope.directory, path)) throw new Error('preview_scope_forbidden');
+            if (!allowed(path)) throw new Error('preview_scope_forbidden');
             if (stat.size > config.previewMaxBytes - bytes) throw new Error('preview_too_large');
             const chunks = [];
             signal.throwIfAborted();
@@ -93,7 +96,7 @@ export function createPreview(config) {
           if (!location) throw new Error('preview_fetch_failed');
           const next = new URL(location, url);
           next.hash = '';
-          return read(next.href, new Set([...redirects, url.href]));
+          return read(next.href, new Set([...redirects, url.href]), asset);
         }
         const chunks = [];
         try {
@@ -121,7 +124,7 @@ export function createPreview(config) {
         if (resource.status < 200 || resource.status >= 300) throw new Error('preview_fetch_failed');
         const type = resource.contentType.split(';')[0].trim().toLowerCase();
         let html;
-        if (type === 'text/html' || type === 'application/xhtml+xml') html = await prepareHtml(resource, read, config.previewMaxBytes);
+        if (type === 'text/html' || type === 'application/xhtml+xml') html = await prepareHtml(resource, target => read(target, new Set(), true), config.previewMaxBytes);
         else if (type.startsWith('text/') || type === 'application/json') html = `<html><head></head><body><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(resource.data.toString('utf8'))}</pre></body></html>`;
         else if (/^(image|audio|video)\//.test(type)) {
           const tag = type.startsWith('image/') ? 'img' : type.split('/')[0];

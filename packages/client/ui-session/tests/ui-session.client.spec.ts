@@ -209,6 +209,39 @@ describe('UiSession bindings', () => {
     await ctx.fiber.dispose()
   })
 
+  it('publishes non-current binding availability, roster changes and release independently of selection', async () => {
+    const ctx = new Context()
+    const bench = createSessionsBench(ctx)
+    const service = createUiSession(ctx, bench)
+    const id = sessionId('background')
+    const snapshots: unknown[] = []
+    const current = vi.fn()
+    const offCurrent = service.adapter.current.subscribe(current)
+    const off = service.adapter.subscribe(() => { snapshots.push(service.adapter.resolve(id)) })
+    expect(service.adapter.resolve(id)).toBeUndefined()
+    bench.binding(id)
+    expect(snapshots.at(-1)).toMatchObject({ key: id })
+    expect(current).not.toHaveBeenCalled()
+    const first = snapshots.at(-1)
+    const dispose = service.provide({ props: ['feature'], resolve: () => ({ props: { feature: 'live' } }) })
+    expect(snapshots.at(-1)).not.toBe(first)
+    expect(snapshots.at(-1)).toMatchObject({ props: { feature: 'live' } })
+    dispose()
+    expect(snapshots.at(-1)).toMatchObject({ props: { sessionId: id } })
+    expect((snapshots.at(-1) as { props: object }).props).not.toHaveProperty('feature')
+    current.mockClear()
+    await bench.release(id)
+    expect(snapshots.at(-1)).toBeUndefined()
+    expect(current).not.toHaveBeenCalled()
+    off()
+    offCurrent()
+    const count = snapshots.length
+    bench.binding(id)
+    expect(snapshots).toHaveLength(count)
+    await ctx.fiber.dispose()
+    await bench.release(id)
+  })
+
   it('renders the empty area and a Session-keyed selected area', () => {
     const ctx = new Context()
     const bench = createSessionsBench(ctx)
@@ -272,6 +305,22 @@ describe('UiSession bindings', () => {
       '[ui-session] current binding subscriber failed:',
       failure,
     )
+  })
+
+  it('contains a failing binding subscriber and continues dispatch', async () => {
+    const ctx = new Context()
+    const bench = createSessionsBench(ctx)
+    const service = createUiSession(ctx, bench)
+    const failure = new Error('binding subscriber failed')
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    service.adapter.subscribe(() => { throw failure })
+    const after = vi.fn()
+    service.adapter.subscribe(after)
+    bench.binding(sessionId('background'))
+    expect(after).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledWith('[ui-session] bindings subscriber failed:', failure)
+    await ctx.fiber.dispose()
+    await bench.release(sessionId('background'))
   })
 
   it('releases cached bindings when the owning Client context stops', async () => {

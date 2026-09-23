@@ -1,5 +1,4 @@
 - checkbox "Append newline"
 - text: Append newline
 - button "Send":
-  - text: Send
   - img

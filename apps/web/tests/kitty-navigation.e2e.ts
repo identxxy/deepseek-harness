@@ -8,18 +8,20 @@ import { chromium } from 'playwright'
 import { build } from 'tsdown'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
-  captureStableAria, compareOrRefreshGolden, launchWebScaffold,
+  captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession,
   watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage } from './support.ts'
+
+type SavedLayout = { paneRoot: unknown; activePaneId: string | null }
 
 const MODE = webSnapshotMode()
 const EXPECTED = fileURLToPath(new URL('./expected/kitty-navigation/', import.meta.url))
 const ARTIFACTS = fileURLToPath(new URL('../../../tmp/kitty-navigation/', import.meta.url))
 const KITTY_ROOT = fileURLToPath(new URL('../../../plugins/kitty/', import.meta.url))
 const PANES = [
-  { instance: 'fixture-kitty', token: 'alpha-token', id: 1, title: 'Alpha terminal', cwd: '/workspace/alpha', program: 'zsh', pid: 101 },
-  { instance: 'fixture-kitty', token: 'beta-token', id: 2, title: 'Beta terminal', cwd: '/workspace/beta', program: 'python', pid: 102 },
+  { windowId: 'a'.repeat(64), instance: 'fixture-kitty', token: 'alpha-token', id: 1, title: 'Alpha terminal', cwd: '/workspace/alpha', program: 'zsh', pid: 101 },
+  { windowId: 'b'.repeat(64), instance: 'fixture-kitty', token: 'beta-token', id: 2, title: 'Beta terminal', cwd: '/workspace/beta', program: 'python', pid: 102 },
 ]
 const SCROLL_OPTIONS = { debounceMs: 70, pixelsPerLine: 40, touchSensitivity: 2, maxLines: 8 }
 const SCREEN_SAMPLE = [
@@ -55,6 +57,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
   let scrollBarrier: Promise<void> | undefined
   let releaseScroll: (() => void) | undefined
   const pendingScrollResponses = new Set<Promise<void>>()
+  let screenTokens: string[]
   let catalogReads = 0
   let screenExtra = ''
   let reportUrl: string
@@ -80,6 +83,9 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     const socketDirectory = join(fixtureRoot, 'sockets')
     await mkdir(socketDirectory)
     const reportRoot = join(fixtureRoot, 'reports')
+    const sharedAssets = join(fixtureRoot, 'shared-assets')
+    await mkdir(sharedAssets)
+    await writeFile(join(sharedAssets, 'figure.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="48"><rect width="96" height="48" fill="#246ea0"/></svg>')
     await mkdir(join(reportRoot, 'assets'), { recursive: true })
     reportUrl = pathToFileURL(join(reportRoot, 'index.html')).href
     await writeFile(join(reportRoot, 'index.html'), `<!doctype html><html><head><base href=assets/><title>Local report</title><link rel=stylesheet href=style.css></head><body>
@@ -94,12 +100,13 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
       fetch('./data.json').then(response=>response.json()).then(value=>{document.getElementById('data').textContent=value.message});
       try{parent.document.body.dataset.reportAccess='unsafe'}catch{document.body.dataset.isolated='yes'}`)
     await writeFile(join(reportRoot, 'next.html'), '<h1>Next report</h1><form action=index.html method=get><input name=q value=return><button>Return to report</button></form>')
+    await writeFile(join(reportRoot, 'external-assets.html'), '<h1>Report with separate assets</h1><img alt="External figure" src="../shared-assets/figure.svg"><video controls poster="../shared-assets/figure.svg"></video><a href="../shared-assets/figure.svg">Outside report directory</a>')
     await writeFile(join(reportRoot, 'large.html'), `<h1>Large local report</h1><!--${'x'.repeat(17 * 1024 * 1024)}--><p>End of large report</p>`)
     await writeFile(join(reportRoot, 'oversized.html'), '')
     await truncate(join(reportRoot, 'oversized.html'), 64 * 1024 * 1024 + 1)
     await writeFile(join(fixtureRoot, 'private.txt'), 'OUTSIDE_REPORT_SECRET')
     const overlayPath = join(fixtureRoot, 'kitty.patch.yml')
-    await writeFile(overlayPath, `${await readFile(join(KITTY_ROOT, 'cordis.patch.yml'), 'utf8')}\n- id: kitty-host\n  config:\n    socketDirectory: ${JSON.stringify(socketDirectory)}\n`)
+    await writeFile(overlayPath, `${await readFile(join(KITTY_ROOT, 'cordis.patch.yml'), 'utf8')}\n- id: kitty-host\n  config:\n    socketDirectory: ${JSON.stringify(socketDirectory)}\n    previewAssetDirectories: [${JSON.stringify(sharedAssets)}]\n`)
     scaffold = await launchWebScaffold({
       extraOverlayPath: overlayPath,
       extraInstallAnchors: [installAnchor],
@@ -128,6 +135,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     scrollOffset = 0
     scrollBarrier = undefined
     releaseScroll = undefined
+    screenTokens = []
     catalogReads = 0
     screenExtra = ''
     catalogBarrier = undefined
@@ -144,7 +152,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
         mutations.push(request.method())
         const input = request.postDataJSON() as { token?: string; action?: string; key?: string; amount?: number | 'end' }
         if (allowComposer && request.method() === 'POST' && panes.some(pane => pane.token === input.token)
-          && (input.action === 'text' || (input.action === 'key' && ['up', 'down', 'left', 'right'].includes(input.key ?? '')))) {
+          && (input.action === 'text' || (input.action === 'key' && ['enter', 'up', 'down', 'left', 'right'].includes(input.key ?? '')))) {
           composerInputs.push(input)
           const response = (async () => {
             await composerBarrier
@@ -175,7 +183,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
           return
         }
         if (allowCreate && request.method() === 'POST' && input.token === 'beta-token' && input.action === 'create') {
-          panes = [...PANES, { instance: 'fixture-kitty', token: 'gamma-token', id: 3, title: 'Gamma terminal', cwd: '/workspace/beta', program: 'zsh', pid: 103 }]
+          panes = [...PANES, { windowId: 'c'.repeat(64), instance: 'fixture-kitty', token: 'gamma-token', id: 3, title: 'Gamma terminal', cwd: '/workspace/beta', program: 'zsh', pid: 103 }]
           await route.fulfill({ json: { id: 3, instance: 'fixture-kitty' } })
           return
         }
@@ -184,8 +192,10 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
       }
       const token = new URL(request.url()).searchParams.get('token')
       if (token !== null) {
-        const marker = token === 'alpha-token' ? 'ALPHA_SCREEN_READY' : token === 'beta-token' ? 'BETA_SCREEN_READY' : 'GAMMA_SCREEN_READY'
-        await route.fulfill(token === staleToken
+        screenTokens.push(token)
+        const target = panes.find(pane => pane.token === token)
+        const marker = target?.id === 1 ? 'ALPHA_SCREEN_READY' : target?.id === 2 ? 'BETA_SCREEN_READY' : 'GAMMA_SCREEN_READY'
+        await route.fulfill(token === staleToken || !target
           ? { status: 409, json: { error: 'stale_target' } }
           : { json: { text: `${marker}\n${SCREEN_SAMPLE}${screenExtra}` } })
         return
@@ -360,7 +370,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await snapshot('windows')
     await showScreen('Alpha')
     if (MODE === 'refresh') await page.screenshot({ path: join(ARTIFACTS, 'desktop-terminal.png') })
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Keep this draft in Alpha')
     await page.locator('.dsh-kitty-file').setInputFiles({
       name: 'draft.png', mimeType: 'image/png',
@@ -415,14 +425,18 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await openWindows()
     await showScreen('Alpha')
-    const newline = page.getByRole('checkbox', { name: 'Append newline', exact: true })
+    const newline = page.locator('[data-actor-kind="panel"][data-active]').getByRole('checkbox', { name: 'Append newline', exact: true })
     expect(await newline.count()).toBe(1)
     expect(await newline.isChecked()).toBe(true)
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     const send = page.getByRole('button', { name: 'Send', exact: true })
+    expect(await page.locator('.dsh-kitty-newline span').isVisible()).toBe(true)
+    expect(await page.locator('.dsh-kitty-newline span').textContent()).toBe('Append newline')
     expect(await page.getByRole('button', { name: 'Up arrow', exact: true }).count()).toBe(0)
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 })
+      expect((await page.locator('.dsh-kitty-input').boundingBox())!.height).toBeLessThanOrEqual(42)
+      expect((await page.locator('.dsh-kitty-compose').boundingBox())!.height).toBeLessThanOrEqual(50)
       await expect.poll(async () => {
         const bounds = await send.boundingBox()
         return bounds!.x + bounds!.width
@@ -475,12 +489,42 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     expect(await newline.isChecked()).toBe(false)
   })
 
+  it.each([390, 1680])('uses one Send button for text or an empty Enter at width %s', async (width) => {
+    allowComposer = true
+    await page.setViewportSize({ width, height: 1000 })
+    await openWindows()
+    await showScreen('Alpha')
+    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const newline = page.getByRole('checkbox', { name: 'Append newline', exact: true })
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+    await newline.uncheck()
+    await draft.fill('/model')
+    await send.click()
+    await expect.poll(() => draft.inputValue()).toBe('')
+    expect(composerInputs).toEqual([{ token: 'alpha-token', action: 'text', text: '/model', submit: false }])
+    await send.click()
+    await expect.poll(() => composerInputs.length).toBe(2)
+    await expect.poll(() => send.isEnabled()).toBe(true)
+    await newline.check()
+    await send.click()
+    await expect.poll(() => composerInputs.length).toBe(3)
+    await expect.poll(() => send.isEnabled()).toBe(true)
+    await draft.press('Control+Enter')
+    await expect.poll(() => composerInputs.length).toBe(4)
+    await expect.poll(() => send.isEnabled()).toBe(true)
+    expect(composerInputs.slice(1)).toEqual(Array.from({ length: 3 }, () => ({ token: 'alpha-token', action: 'key', key: 'enter' })))
+    await page.getByRole('button', { name: 'Terminal keys', exact: true }).click()
+    expect(await page.getByRole('button', { name: 'Enter ↵', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Paste only', exact: true }).count()).toBe(0)
+    expect(await send.count()).toBe(1)
+  })
+
   it('keeps Alt+Up visible at the start of mobile keys and preserves the draft after dispatch', async () => {
     allowAltUp = true
     await page.setViewportSize({ width: 390, height: 844 })
     await openWindows()
     await showScreen('Alpha')
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Answer after focusing the question')
     await page.getByRole('button', { name: 'Terminal keys', exact: true }).click()
     const keyboard = page.locator('.dsh-kitty-keyboard')
@@ -525,16 +569,16 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     expect(await report.getByRole('heading', { name: 'Large local report', exact: true }).isVisible()).toBe(true)
   })
 
-  it('shares one composer across Kitty splits while retaining each pane draft, image and send preference', async () => {
+  it('keeps a compact expanding composer in each Kitty pane with independent drafts, images and send preferences', async () => {
     allowComposer = true
     panes = [...PANES, {
-      instance: 'fixture-kitty', token: 'gamma-token', id: 3, title: 'Gamma terminal', cwd: '/workspace/gamma', program: 'zsh', pid: 103,
+      windowId: 'c'.repeat(64), instance: 'fixture-kitty', token: 'gamma-token', id: 3, title: 'Gamma terminal', cwd: '/workspace/gamma', program: 'zsh', pid: 103,
     }]
     await page.setViewportSize({ width: 1680, height: 1050 })
     await openWindows()
     await showScreen('Alpha')
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
-    const newline = page.getByRole('checkbox', { name: 'Append newline', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const newline = page.locator('[data-actor-kind="panel"][data-active]').getByRole('checkbox', { name: 'Append newline', exact: true })
     await draft.fill('Keep Alpha draft')
     await newline.uncheck()
     await page.locator('.dsh-kitty-file').setInputFiles({
@@ -548,11 +592,13 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     const left = splits.nth(0)
     const right = splits.nth(1)
     await right.locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
-    expect(await draft.count()).toBe(1)
-    expect(await splits.getByRole('textbox').count()).toBe(0)
+    expect(await splits.getByRole('textbox').count()).toBe(2)
+    expect(await right.locator('.dsh-kitty-input').evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(42)
+    expect(await right.locator('.dsh-kitty-compose').evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(50)
     expect(await newline.isChecked()).toBe(true)
     expect(await draft.inputValue()).toBe('')
-    expect(await page.getByRole('img', { name: 'alpha.png', exact: true }).count()).toBe(0)
+    expect(await right.getByRole('img', { name: 'alpha.png', exact: true }).count()).toBe(0)
+    expect(await left.getByRole('img', { name: 'alpha.png', exact: true }).count()).toBe(1)
     await draft.fill('Replace this draft')
     await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
     await right.locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
@@ -560,10 +606,11 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     expect(await left.locator('.dsh-kitty-screen').textContent()).toContain('ALPHA_SCREEN_READY')
     expect(await draft.inputValue()).toBe('')
     await draft.fill('Keep Beta draft')
-    const sharedInput = await draft.elementHandle()
+    const betaInput = await draft.elementHandle()
     await left.locator('.dsh-kitty-pane-title').click()
     await expect.poll(() => page.getByRole('button', { name: '#1 · Alpha terminal', exact: true }).getAttribute('aria-pressed')).toBe('true')
-    expect(await sharedInput!.evaluate(element => element === document.querySelector('.dsh-kitty-compose textarea'))).toBe(true)
+    expect(await betaInput!.evaluate(element => element === document.querySelectorAll('.dsh-kitty-compose textarea')[1])).toBe(true)
+    expect(await right.getByRole('textbox').inputValue()).toBe('Keep Beta draft')
     expect(await draft.inputValue()).toBe('Keep Alpha draft')
     expect(await newline.isChecked()).toBe(false)
     await page.getByRole('img', { name: 'alpha.png', exact: true }).waitFor()
@@ -576,24 +623,34 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await right.locator('.dsh-kitty-pane-title').click()
     expect(await draft.inputValue()).toBe('Keep Beta draft')
     expect(await newline.isChecked()).toBe(true)
-    expect(await page.locator('.dsh-kitty-composer-target').textContent()).toBe('Send to#2 · Beta terminal')
     await right.getByRole('button', { name: 'Split down', exact: true }).click()
     await expect.poll(() => page.locator('.dsh-kitty-pane-title').allTextContents())
       .toEqual(['#3 · Gamma terminal', '#2 · Beta terminal', '#2 · Beta terminal'])
-    expect(await draft.count()).toBe(1)
+    expect(await splits.getByRole('textbox').count()).toBe(3)
     expect(await draft.inputValue()).toBe('')
-    const canvasBounds = await page.locator('[class*="paneCanvas"]').boundingBox()
-    const composerBounds = await page.locator('.dsh-kitty-compose').boundingBox()
-    expect(composerBounds!.y).toBeGreaterThanOrEqual(canvasBounds!.y + canvasBounds!.height - 1)
-    expect(composerBounds!.width).toBeCloseTo(canvasBounds!.width, 0)
-    expect(await page.locator('.dsh-kitty-compose').evaluate(element => parseFloat(getComputedStyle(element).paddingLeft))).toBeGreaterThan(0)
+    const last = splits.nth(2)
+    const handleBounds = (await page.getByRole('button', { name: 'Browser', exact: true }).boundingBox())!
+    const canvasBounds = (await page.locator('[data-pane-canvas]').boundingBox())!
+    expect(canvasBounds.x + canvasBounds.width).toBeLessThanOrEqual(handleBounds.x - 4)
+    const initialHeight = (await last.locator('.dsh-kitty-input').boundingBox())!.height
+    await draft.fill('First line\nSecond line\nThird line')
+    expect((await last.locator('.dsh-kitty-input').boundingBox())!.height).toBeGreaterThan(initialHeight + 20)
+    await draft.fill('')
+    await expect.poll(async () => (await last.locator('.dsh-kitty-input').boundingBox())!.height).toBe(initialHeight)
+    for (const pane of await splits.all()) {
+      const paneBounds = (await pane.boundingBox())!
+      const composerBounds = (await pane.locator('.dsh-kitty-compose').boundingBox())!
+      expect(composerBounds.y).toBeGreaterThan(paneBounds.y + 34)
+      expect(composerBounds.y + composerBounds.height).toBeLessThanOrEqual(paneBounds.y + paneBounds.height + 1)
+      expect(composerBounds.width).toBeLessThanOrEqual(paneBounds.width)
+    }
     await compareOrRefreshGolden(join(EXPECTED, 'desktop-split-terminals.expected.md'),
       await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
     if (MODE === 'refresh') await page.screenshot({ path: join(ARTIFACTS, 'desktop-split-terminals.png') })
     await splits.nth(2).getByRole('button', { name: 'Close pane', exact: true }).click()
     await right.locator('.dsh-kitty-pane-title').click()
     expect(await draft.inputValue()).toBe('Keep Beta draft')
-    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await right.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(() => draft.inputValue()).toBe('')
     await left.locator('.dsh-kitty-pane-title').click()
     await draft.fill('Gamma without Enter')
@@ -605,12 +662,12 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     ])
   })
 
-  it('settles a pending send in its original split while the shared composer edits another pane', async () => {
+  it('settles a pending send in its original split while another pane edits its draft', async () => {
     allowComposer = true
     composerBarrier = new Promise<void>((resolve) => { releaseComposer = resolve })
     await openWindows()
     await showScreen('Alpha')
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Send Alpha once')
     const image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA1sAAAAASUVORK5CYII='
     await page.locator('.dsh-kitty-compose').evaluate((element, data) => {
@@ -644,7 +701,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     composerBarrier = new Promise<void>((resolve) => { releaseComposer = resolve })
     await openWindows()
     await showScreen('Alpha')
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Old Alpha submission')
     await page.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(() => composerInputs.length).toBe(1)
@@ -671,7 +728,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await left.locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
     await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
     await right.locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Keep the focused terminal draft')
     staleToken = 'alpha-token'
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
@@ -733,7 +790,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await openWindows()
     await showScreen('Alpha')
     const output = page.locator('.dsh-kitty-screen')
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Keep the draft while browsing history')
     await output.evaluate((element) => { element.scrollTop = 200 })
     await output.hover()
@@ -948,11 +1005,31 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     expect(await page.getByRole('button', { name: 'Latest output ↓', exact: true }).isVisible()).toBe(true)
   })
 
+  it('loads configured external figures and posters without granting report navigation to their directory', async () => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const url = new URL('external-assets.html', reportUrl).href
+    screenExtra = `\n${url}`
+    await openWindows()
+    await showScreen('Alpha')
+    await page.locator('.dsh-kitty-screen').getByRole('link', { name: url, exact: true }).click()
+    const report = page.frameLocator('.dsh-kitty-preview iframe')
+    await report.getByRole('heading', { name: 'Report with separate assets', exact: true }).waitFor()
+    await expect.poll(() => report.getByAltText('External figure').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(96)
+    expect(await report.locator('video').getAttribute('poster')).toMatch(/^data:image\/svg\+xml;base64,/)
+    await compareOrRefreshGolden(join(EXPECTED, 'report-external-assets.expected.md'),
+      await captureStableAria(page, '.dsh-kitty-preview', scaffold.workspaceCwd, { replacements: [[url, '{{reportUrl}}']] }), MODE)
+    await report.getByRole('link', { name: 'Outside report directory', exact: true }).click()
+    await page.locator('.dsh-kitty-preview').getByRole('alert').filter({ hasText: 'This report requests files outside the allowed preview directories.' }).waitFor()
+    expect(await report.getByRole('heading', { name: 'Report with separate assets', exact: true }).isVisible()).toBe(true)
+    await compareOrRefreshGolden(join(EXPECTED, 'report-forbidden.expected.md'),
+      await captureStableAria(page, '.dsh-kitty-preview-status', scaffold.workspaceCwd), MODE)
+  })
+
   it('opens local reports in a resizable Browser with assets, interaction and scoped history', async () => {
     screenExtra = `\n${reportUrl}\n\u001b]8;;${reportUrl}\u0007Open local report\u001b]8;;\u0007`
     await openWindows()
     await showScreen('Alpha')
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Keep the terminal draft')
     await page.locator('.dsh-kitty-screen').getByRole('link', { name: 'Open local report', exact: true }).click()
     const drawer = page.locator('.dsh-kitty-preview')
@@ -1011,7 +1088,7 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     screenExtra = `\n${reportUrl}`
     await openWindows()
     await showScreen('Alpha')
-    const draft = page.getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
     await draft.fill('Mobile draft')
     const handle = page.getByRole('button', { name: 'Browser', exact: true })
     expect(await handle.textContent()).toBe('BROWSER')
@@ -1061,6 +1138,223 @@ describe.skipIf(MODE === 'record')('web e2e: Kitty window navigation', () => {
     await expect.poll(() => page.locator('.dsh-kitty-screen').isVisible()).toBe(false)
     await page.goBack()
     await page.getByRole('button', { name: 'Kitty terminal', exact: true }).waitFor()
+  })
+
+  it('restores each Kitty split with fresh tokens and retains the complete layout on mobile', async () => {
+    await openWindows()
+    await showScreen('Alpha')
+    await page.getByRole('button', { name: 'Split right', exact: true }).click()
+    const splits = page.locator('[data-actor-kind="panel"]')
+    await expect.poll(() => splits.count()).toBe(2)
+    await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
+    await splits.nth(1).locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    const draft = page.locator('[data-actor-kind="panel"][data-active]').getByRole('textbox', { name: 'Text for the selected terminal', exact: true })
+    await draft.fill('Unsent input stays transient')
+    await splits.nth(1).getByRole('checkbox', { name: 'Append newline', exact: true }).uncheck()
+    const saved = await page.evaluate(() => ({
+      layout: JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout,
+      kitty: JSON.parse(localStorage.getItem('dsh.kitty.windows.v1')!) as unknown,
+    }))
+    const paneIds = await splits.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-actor-pane')!))
+    expect(saved.kitty).toEqual({ version: 1, windows: {
+      [paneIds[0]!]: PANES[0]!.windowId,
+      [paneIds[1]!]: PANES[1]!.windowId,
+    } })
+    panes = PANES.map(pane => ({ ...pane, token: `${pane.token}-restarted`, instance: 'restarted-instance', title: `${pane.title} renamed`, cwd: '/new/cwd', pid: pane.pid + 100 }))
+    catalogBarrier = new Promise<void>((resolve) => { releaseCatalog = resolve })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect.poll(() => page.getByRole('heading', { name: 'Reconnecting to the saved Kitty window…', exact: true }).count()).toBe(2)
+    const restoredReads = screenTokens.length
+    catalogBarrier = undefined
+    releaseCatalog?.()
+    await splits.nth(0).locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+    await splits.nth(1).locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    expect(screenTokens.slice(restoredReads).sort()).toEqual(['alpha-token-restarted', 'beta-token-restarted'])
+    expect(await page.locator('.dsh-kitty-pane-title').allTextContents()).toEqual(['#1 · Alpha terminal renamed', '#2 · Beta terminal renamed'])
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout)).toEqual(saved.layout)
+    expect(await draft.inputValue()).toBe('')
+    expect(await splits.nth(1).getByRole('checkbox', { name: 'Append newline', exact: true }).isChecked()).toBe(true)
+    expect(await page.locator('.dsh-kitty-compose').count()).toBe(2)
+    await compareOrRefreshGolden(join(EXPECTED, 'restored-kitty-splits.expected.md'),
+      await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect.poll(() => splits.count()).toBe(1)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout)).toEqual(saved.layout)
+    await page.setViewportSize({ width: 1680, height: 1000 })
+    await splits.nth(0).locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+    await splits.nth(1).locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+  })
+
+  it('keeps a missing Kitty split empty even when another window reuses its number and title', async () => {
+    await openWindows()
+    await showScreen('Alpha')
+    await page.getByRole('button', { name: 'Split right', exact: true }).click()
+    const splits = page.locator('[data-actor-kind="panel"]')
+    await expect.poll(() => splits.count()).toBe(2)
+    await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
+    await splits.nth(1).locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    panes = [PANES[0]!, { ...PANES[1]!, windowId: 'd'.repeat(64), token: 'replacement-token' }]
+    screenTokens = []
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await splits.nth(0).locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+    await splits.nth(1).getByText('The saved Kitty window is no longer available. Choose another window.', { exact: true }).waitFor()
+    expect(screenTokens).toEqual(['alpha-token'])
+    expect(await splits.nth(1).locator('.dsh-kitty-compose').count()).toBe(0)
+    expect(await splits.nth(0).locator('.dsh-kitty-compose').count()).toBe(1)
+    await compareOrRefreshGolden(join(EXPECTED, 'missing-saved-window.expected.md'),
+      await captureStableAria(page, '[data-actor-kind="panel"]:last-child', scaffold.workspaceCwd), MODE)
+    await splits.nth(1).getByRole('button', { name: 'Kitty windows', exact: true }).click()
+    await page.getByRole('button', { name: '#2 · Beta terminal', exact: true }).click()
+    await splits.nth(1).locator('.dsh-kitty-screen').filter({ hasText: 'BETA_SCREEN_READY' }).waitFor()
+    expect(screenTokens).toContain('replacement-token')
+  })
+
+  it('retains saved Kitty bindings after a failed catalog read and restores them on retry', async () => {
+    await openWindows()
+    await showScreen('Alpha')
+    const saved = await page.evaluate(() => localStorage.getItem('dsh.kitty.windows.v1'))
+    listError = true
+    screenTokens = []
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.locator('.dsh-kitty-empty').getByRole('alert').waitFor()
+    expect(screenTokens).toEqual([])
+    expect(await page.evaluate(() => localStorage.getItem('dsh.kitty.windows.v1'))).toBe(saved)
+    listError = false
+    await page.locator('.dsh-kitty-empty').getByRole('button', { name: 'Refresh panes', exact: true }).click()
+    await page.locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+    expect(screenTokens).toEqual(['alpha-token'])
+  })
+
+  it.each([
+    { version: 2, windows: { pane: 'a'.repeat(64) } },
+    { version: 1, windows: { pane: 'alpha-token' } },
+  ])('rejects malformed saved Kitty bindings: $version / $windows.pane', async (persisted) => {
+    await openWindows()
+    await showScreen('Alpha')
+    const diagnostics: string[] = []
+    page.on('console', (message) => {
+      if (message.text().includes("snapshot store 'dsh.kitty.windows.v1' rehydration failed")) diagnostics.push(message.text())
+    })
+    await page.evaluate((value) => { localStorage.setItem('dsh.kitty.windows.v1', JSON.stringify(value)) }, persisted)
+    screenTokens = []
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByRole('heading', { name: 'Select a Kitty window', exact: true }).waitFor()
+    expect(diagnostics).toHaveLength(1)
+    expect(screenTokens).toEqual([])
+    await page.locator('.dsh-kitty-empty').getByRole('button', { name: 'Kitty windows', exact: true }).click()
+    await showScreen('Alpha')
+  })
+
+  it('restores mixed Agent Sessions and Kitty without the first Session baseline replacing the focused pane', async () => {
+    const raw = await readFile(new URL('../../../snapshots/web/navigation-panes/session.v2.jsonl', import.meta.url), 'utf8')
+    const sessionIds: string[] = []
+    for (const letter of ['A', 'B']) {
+      sessionIds.push(await seedSession(scaffold, raw.replaceAll('FIRST_DONE', `AGENT_${letter}_OK`)
+        .replaceAll('"FIR","ST","_D","ONE"', `"AGE","NT","_${letter}","_OK"`)
+        .replaceAll('NavScenario: first run bash to', `Restore Agent ${letter}`), `kitty-restore-agent-${letter.toLowerCase()}`))
+    }
+    await openWindows()
+    await showScreen('Alpha')
+    const saved = await page.evaluate(([firstSession, secondSession]) => {
+      const layout = JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout
+      if (layout.paneRoot === null) throw new Error('Expected a saved Kitty pane')
+      layout.paneRoot = { kind: 'split', id: 'mixed-root', direction: 'horizontal', ratio: 0.5,
+        first: { kind: 'leaf', id: 'agent-a', actor: { kind: 'agent', id: firstSession! } },
+        second: { kind: 'split', id: 'mixed-right', direction: 'vertical', ratio: 0.5,
+          first: { kind: 'leaf', id: 'agent-b', actor: { kind: 'agent', id: secondSession! } }, second: layout.paneRoot },
+      }
+      localStorage.setItem('dsh.layout.panes.v1', JSON.stringify(layout))
+      return layout
+    }, sessionIds)
+    let releaseBaseline: (() => void) | undefined
+    const baselineBarrier = new Promise<void>((resolve) => { releaseBaseline = resolve })
+    const pending = new Set<Promise<void>>()
+    let baselineRead = false
+    await page.route(url => url.pathname === '/api/session/list', async (route) => {
+      const response = (async () => {
+        baselineRead = true
+        await baselineBarrier
+        await route.continue()
+      })()
+      pending.add(response)
+      try { await response } finally { pending.delete(response) }
+    })
+    try {
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+      expect(baselineRead).toBe(true)
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout)).toEqual(saved)
+      releaseBaseline?.()
+      await page.locator('[data-actor-pane="agent-a"]').getByText('AGENT_A_OK', { exact: true }).waitFor()
+      await page.locator('[data-actor-pane="agent-b"]').getByText('AGENT_B_OK', { exact: true }).waitFor()
+      expect(await page.locator('.dsh-kitty-screen').textContent()).toContain('ALPHA_SCREEN_READY')
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout)).toEqual(saved)
+      await compareOrRefreshGolden(join(EXPECTED, 'restored-agent-and-kitty-splits.expected.md'),
+        await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+      await page.locator('[data-actor-pane="agent-b"]').getByText('AGENT_B_OK', { exact: true }).click()
+      await expect.poll(() => page.evaluate(() => (JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout).activePaneId)).toBe('agent-b')
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.locator('[data-actor-pane="agent-a"]').getByText('AGENT_A_OK', { exact: true }).waitFor()
+      await page.locator('[data-actor-pane="agent-b"]').getByText('AGENT_B_OK', { exact: true }).waitFor()
+      await page.locator('.dsh-kitty-screen').filter({ hasText: 'ALPHA_SCREEN_READY' }).waitFor()
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dsh.layout.panes.v1')!) as SavedLayout)).toEqual({ ...saved, activePaneId: 'agent-b' })
+      const agentA = page.locator('[data-actor-pane="agent-a"]')
+      const agentB = page.locator('[data-actor-pane="agent-b"]')
+      const kitty = page.locator('[data-actor-kind="panel"]')
+      for (const pane of [agentA, agentB]) {
+        expect((await pane.locator('[data-composer-card]').boundingBox())!.height).toBeLessThanOrEqual(42)
+        expect(await pane.getByRole('button', { name: 'More options', exact: true }).getAttribute('aria-expanded')).toBe('false')
+      }
+      expect((await kitty.locator('.dsh-kitty-input').boundingBox())!.height).toBeLessThanOrEqual(42)
+      await agentA.locator('[data-composer-input]').click()
+      await agentA.locator('[data-composer-input]').fill('Agent A draft')
+      await agentB.locator('[data-composer-input]').click()
+      await agentB.locator('[data-composer-input]').fill('Agent B draft')
+      await kitty.getByRole('textbox').fill('Kitty draft')
+      expect(await agentA.locator('[data-composer-input]').textContent()).toBe('Agent A draft')
+      expect(await agentB.locator('[data-composer-input]').textContent()).toBe('Agent B draft')
+      await agentA.locator('[data-composer-input]').click()
+      await agentA.locator('[data-composer-input]').fill('First line\nSecond line\nThird line')
+      expect((await agentA.locator('[data-composer-card]').boundingBox())!.height).toBeGreaterThan(60)
+      await agentA.locator('[data-composer-input]').fill('Agent A draft')
+      await expect.poll(async () => (await agentA.locator('[data-composer-card]').boundingBox())!.height).toBeLessThanOrEqual(42)
+      await agentA.getByRole('button', { name: 'More options', exact: true }).click()
+      expect(await agentA.getByRole('button', { name: 'More options', exact: true }).getAttribute('aria-expanded')).toBe('true')
+      await agentA.getByRole('button', { name: 'More options', exact: true }).click()
+      if (MODE === 'refresh') await page.screenshot({ path: join(ARTIFACTS, 'mixed-compact-inputs.png') })
+      await agentB.locator('[data-composer-input]').click()
+      await agentA.locator('[data-composer-card]').evaluate((element) => {
+        const transfer = new DataTransfer()
+        transfer.items.add(new File([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA1sAAAAASUVORK5CYII='), char => char.charCodeAt(0))], 'agent-only.png', { type: 'image/png' }))
+        element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }))
+      })
+      await agentA.getByRole('img', { name: 'agent-only.png', exact: true }).waitFor()
+      expect(await agentB.getByRole('img', { name: 'agent-only.png', exact: true }).count()).toBe(0)
+      expect(await kitty.getByRole('img', { name: 'agent-only.png', exact: true }).count()).toBe(0)
+      await agentA.getByRole('button', { name: 'Split down', exact: true }).click()
+      const duplicate = page.locator('[data-actor-kind="agent"][data-active]')
+      const duplicateId = await duplicate.getAttribute('data-actor-pane')
+      expect(duplicateId).not.toBe('agent-a')
+      await duplicate.locator('[data-composer-input]').fill('Shared Session draft')
+      await expect.poll(() => agentA.locator('[data-composer-input]').textContent()).toBe('Shared Session draft')
+      await agentA.locator('[data-composer-input]').focus()
+      await agentA.locator('[data-composer-input]').fill('Draft after focus transfer')
+      const other = page.locator(`[data-actor-pane="${duplicateId}"]`)
+      await expect.poll(() => other.locator('[data-composer-input]').textContent()).toBe('Draft after focus transfer')
+      await other.getByRole('button', { name: 'Close pane', exact: true }).click()
+      await agentA.locator('[data-composer-input]').click()
+      await agentA.locator('[data-composer-input]').fill('Draft after closing duplicate')
+      await agentB.locator('[data-composer-input]').click()
+      expect(await agentB.locator('[data-composer-input]').textContent()).toBe('Agent B draft')
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect.poll(() => agentA.locator('[data-composer-input]').textContent()).toBe('Draft after closing duplicate')
+      await expect.poll(() => agentB.locator('[data-composer-input]').textContent()).toBe('Agent B draft')
+    } finally {
+      releaseBaseline?.()
+      await Promise.all(pending)
+    }
   })
 
 })

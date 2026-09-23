@@ -49,7 +49,7 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 
 插件通过 `ctx.slots.inject` 等待 `conversation.input.attachments`、`conversation.message.images`、`conversation.trajectory.images` 与 `tool.call.images`。随后它注册 composer rail、文档拖放目标、供 Chat、Trajectory 与工具结果共用的历史图片 gallery，以及原图灯箱。呈现组件保持纯 props：槽位持有方提供附件数据、图片加载、回调与语言包翻译器；包入口不导出任何组件。
 
-`ComposerAttachments` 接收附件 owner props 与本地化翻译器，不依赖 Session 上下文，因此原生插件窗格也能共用其展示组件。自行处理窗格内拖放事件的嵌入方设置 `documentDrop={false}`，避免接收发给其他窗格的文件。
+`ComposerAttachments` 接收附件 owner props 与本地化翻译器，不依赖 Session 上下文，因此原生插件窗格也能共用其展示组件。附件 owner 为非聚焦窗格或自行处理局部拖放的嵌入方设置 `documentDrop={false}`。文档接收跳过已被局部拖放处理器消费的批次，使一次拖放只进入目标窗格。
 
 | 文件 | 职责 |
 |---|---|

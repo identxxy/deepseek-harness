@@ -109,6 +109,7 @@ function mount(
   options: {
     /** When true, mimic overlay:true chain siblings (hidden fallback + takeover). */
     overlayTakeover?: boolean
+    compactInput?: boolean
     /** The session list summary's `blank` flag — independent of the snapshot's. */
     summaryBlank?: boolean
     /** Drop the session's summary row entirely (a session the list has not caught up with). */
@@ -287,6 +288,7 @@ function mount(
       : (opts?.fallback ?? null)
   )) as ConversationRootProps['renderSlotChain']
   const props: ConversationRootProps = {
+    ...(options.compactInput === true ? { compactInput: true } : {}),
     sessionId: SID,
     SessionProvider: ({ children }) => children,
     useSession,
@@ -330,6 +332,11 @@ describe('Hero chrome', () => {
 })
 
 describe('ConversationRoot resident composer', () => {
+  it('passes the pane compact preference only to the default composer bar', () => {
+    const { view } = mount(sessionSnapshotOf({ blank: false }), undefined, undefined, { compactInput: true })
+    expect(view.getByRole('button', { name: '更多选项' })).toBeTruthy()
+  })
+
   it('does not redispatch composer child slots for an unrelated Session publication', () => {
     const b = mount(sessionSnapshotOf())
     const childKeys = new Set([

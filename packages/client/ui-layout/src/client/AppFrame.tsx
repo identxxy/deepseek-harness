@@ -36,7 +36,7 @@ export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsLocale<'layout'>
   & PropsRenderSlots<
-    'sidebar' | 'conversation' | 'details' | 'shell.overlay' | 'workspace.console' | 'workspace.panel' | 'workspace.panel.header' | 'workspace.panel.composer'
+    'sidebar' | 'conversation' | 'details' | 'shell.overlay' | 'workspace.console' | 'workspace.panel' | 'workspace.panel.header'
   >
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & InjectFace<AppFrameInjected>
@@ -140,7 +140,7 @@ function ActorPane(props: PaneCanvasProps & { node: Extract<PaneNode, { kind: 'l
   const body = node.actor.kind === 'agent'
     ? (
       <SessionProvider sessionId={node.actor.id as SessionId} empty={() => <div className={css.paneUnavailable}>{t('sessionUnavailable')}</div>}>
-        {renderSlot('conversation', {})}
+        {renderSlot('conversation', { compactInput: true, active })}
       </SessionProvider>
     )
     : node.actor.kind === 'console'
@@ -153,6 +153,7 @@ function ActorPane(props: PaneCanvasProps & { node: Extract<PaneNode, { kind: 'l
       data-actor-kind={node.actor.kind}
       data-active={active || undefined}
       onPointerDown={focus}
+      onFocusCapture={focus}
     >
       <div className={css.paneHeader}>
         {node.actor.kind === 'panel'
@@ -307,15 +308,16 @@ export function AppFrame({
   }, [actions, panels.paneRoot, sessionsState.ids, sessionsState.phase])
 
   const previousSession = useRef(currentSession)
-  const selectionEffectMounted = useRef(false)
+  const selectionBaselineReady = useRef(false)
   useEffect(() => {
-    const mounted = selectionEffectMounted.current
-    selectionEffectMounted.current = true
+    if (sessionsState.phase !== 'ready') return
+    const baselineReady = selectionBaselineReady.current
+    selectionBaselineReady.current = true
     if (currentSession === undefined) return
     const { root, activePaneId } = paneSelection.current
     const active = activePaneId === null ? undefined : findPane(root, activePaneId)
     const previous = previousSession.current
-    const selectionChanged = mounted && previous !== currentSession
+    const selectionChanged = baselineReady && previous !== currentSession
     const selectedByPane = paneSelectedSessions.current.delete(currentSession)
     if (!selectedByPane && selectionChanged) paneSelectedSessions.current.clear()
     const replacesExplicitPane = root !== null
@@ -327,7 +329,7 @@ export function AppFrame({
     if (replacesExplicitPane || establishesPaneAfterSelection) {
       actions.openActor({ kind: 'agent', id: currentSession }, paneIdentity('pane'))
     }
-  }, [actions, currentSession])
+  }, [actions, currentSession, sessionsState.phase])
 
   const lastSession = useRef(detailsSession)
   useLayoutEffect(() => {
@@ -367,7 +369,7 @@ export function AppFrame({
     ? readMobileHistoryNavigation(window.history.state)
     : undefined
   const mobileView = panels.mobileView === 'auto'
-    ? historyNavigation?.view ?? (currentSession === undefined ? 'sessions' : 'conversation')
+    ? historyNavigation?.view ?? (panels.paneRoot === null && currentSession === undefined ? 'sessions' : 'conversation')
     : panels.mobileView
   const sidebarPage = historyNavigation?.sidebarPage ?? panels.sidebarPage
   useMobileHistory(singlePane, mobileView, sidebarPage, actions)
@@ -443,7 +445,7 @@ export function AppFrame({
             is session-maybe; the strict details entry naturally renders
             empty while no session is current. */}
         <CenterColumn mobileWidth={singlePane ? viewport : undefined}>
-          <div className={css.paneCanvas}>{paneTree === null
+          <div className={css.paneCanvas} data-pane-canvas>{paneTree === null
             ? (
               <ImplicitAgentPane
                 actions={actions}
@@ -469,9 +471,6 @@ export function AppFrame({
                 t={t}
               />
             )}</div>
-          {focusedPane?.actor.kind === 'panel' && renderSlot('workspace.panel.composer', {
-            actor: focusedPane.actor, paneId: focusedPane.id, active: true, mobile: singlePane,
-          }, { entryKey: focusedPane.actor.id })}
         </CenterColumn>
         <DetailsColumn><SessionProvider>{renderSlot('details', {})}</SessionProvider></DetailsColumn>
       </>

@@ -16,7 +16,7 @@ export function escapeHtml(value) {
 /**
  * Inline scoped static assets; keep external HTTP(S) CDN resources in the browser.
  * @param resource - root report bytes, final URL and media type.
- * @param read - bounded reader enforcing the root directory or origin.
+ * @param read - bounded reader enforcing the root origin or allowed static asset directories.
  * @param maxBytes - bound on intermediate asset expansion as well as serialized output.
  * @returns serialized HTML with absolute navigation URLs and inline local assets.
  */

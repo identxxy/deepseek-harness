@@ -1,0 +1,1 @@
+- alert: This report requests files outside the allowed preview directories.

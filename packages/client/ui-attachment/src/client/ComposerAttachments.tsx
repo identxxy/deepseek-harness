@@ -19,10 +19,7 @@ interface ComposerRailItem extends AttachmentRailItem {
 /** Draft image previews, pending-file cards, drop target, and original-image preview. */
 export function ComposerAttachments({
   attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, dropLimits, t, documentDrop = true,
-}: ComposerAttachmentsOwnerProps & Pick<ComposerAttachmentsProps, 't'> & {
-  /** Disable when the embedding pane owns file drop events. */
-  documentDrop?: boolean
-}) {
+}: ComposerAttachmentsOwnerProps & Pick<ComposerAttachmentsProps, 't'>) {
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const dragDepth = useRef(0)
@@ -32,7 +29,11 @@ export function ComposerAttachments({
   }, [attachments, preview])
 
   useEffect(() => {
-    if (!documentDrop) return
+    if (!documentDrop) {
+      dragDepth.current = 0
+      setDragActive(false)
+      return
+    }
     const fileTransfer = (event: globalThis.DragEvent): DataTransfer | null => {
       const dataTransfer = event.dataTransfer
       if (dataTransfer === null || !dataTransfer.types.includes('Files')) return null
@@ -65,9 +66,10 @@ export function ComposerAttachments({
     const onDrop = (event: globalThis.DragEvent): void => {
       const dataTransfer = fileTransfer(event)
       if (dataTransfer === null) return
+      const handled = event.defaultPrevented
       event.preventDefault()
       reset()
-      if (canAcceptDrop) onAddFiles([...dataTransfer.files])
+      if (canAcceptDrop && !handled) onAddFiles([...dataTransfer.files])
     }
     document.addEventListener('dragenter', onDragEnter)
     document.addEventListener('dragover', onDragOver)

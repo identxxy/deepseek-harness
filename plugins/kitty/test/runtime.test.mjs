@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRuntime } from '../runtime.mjs';
+import { resolveConfig } from '../local.mjs';
+import { tmpdir } from 'node:os';
+
+const stableIdentity = { bootId: 'boot-one', rootProcess: [100, '12345'] };
 
 function fixture() {
   let generation = '1';
   const calls = [];
-  const pane = () => ({ socket: '/tmp/test', inode: '1', id: 4, created: 1, processes: generation, title: 'Codex', cwd: '/work' });
+  const pane = () => ({ ...stableIdentity, socket: '/tmp/test', inode: '1', id: 4, created: 1, processes: generation, title: 'Codex', cwd: '/work' });
   const runtime = createRuntime({ discover: async () => [pane()], command: async (_pane, args, stdin) => {
     calls.push({ args, stdin }); await new Promise(resolve => setTimeout(resolve, 2)); return 'screen';
   }, config: { maxTextBytes: 100, maxImageBytes: 20, maxScrollLines: 80, imageDirectory: '/unused' } });
@@ -82,14 +86,14 @@ test('scrolling rejects invalid amounts and stale targets before moving the view
 test('a foreground change during scrolling prevents reading the replacement process', async () => {
   let generation = 1;
   const calls = [];
-  const runtime = createRuntime({ config: { maxScrollLines: 80 }, discover: async () => [{ socket: 'test', inode: 1, id: 4, created: 1, processes: generation }], command: async (_pane, args) => { calls.push(args[0]); generation++; } });
+  const runtime = createRuntime({ config: { maxScrollLines: 80 }, discover: async () => [{ ...stableIdentity, socket: 'test', inode: 1, id: 4, created: 1, processes: generation }], command: async (_pane, args) => { calls.push(args[0]); generation++; } });
   const [pane] = await runtime.list();
   await assert.rejects(runtime.action({ token: pane.token, action: 'scroll', amount: -2 }), /stale_target/);
   assert.deepEqual(calls, ['scroll-window']);
 });
 test('process change after paste prevents submitting Enter', async () => {
   let generation = 1; const calls = [];
-  const runtime = createRuntime({ config: { maxTextBytes: 100 }, discover: async () => [{socket:'test',inode:1,id:1,created:1,processes:generation}], command: async (_pane, args) => { calls.push(args[0]); generation++; } });
+  const runtime = createRuntime({ config: { maxTextBytes: 100 }, discover: async () => [{...stableIdentity,socket:'test',inode:1,id:1,created:1,processes:generation}], command: async (_pane, args) => { calls.push(args[0]); generation++; } });
   const [pane] = await runtime.list();
   await assert.rejects(runtime.action({token:pane.token,action:'text',text:'hello',submit:true}), /stale/);
   assert.deepEqual(calls, ['send-text']);
@@ -100,7 +104,7 @@ test('image and caption form one safe paste, followed by one Enter', async () =>
   const { join } = await import('node:path');
   const directory = await mkdtemp(join(tmpdir(), 'kitty-image-'));
   const calls = [];
-  const runtime = createRuntime({config:{maxTextBytes:100,maxImageBytes:100,imageDirectory:directory},discover:async()=>[{socket:'test',inode:1,id:1,created:1,processes:1}],command:async(_p,args,stdin)=>{calls.push({args,stdin});}});
+  const runtime = createRuntime({config:{maxTextBytes:100,maxImageBytes:100,imageDirectory:directory},discover:async()=>[{...stableIdentity,socket:'test',inode:1,id:1,created:1,processes:1}],command:async(_p,args,stdin)=>{calls.push({args,stdin});}});
   try {
     const [pane] = await runtime.list();
     await runtime.action({token:pane.token,action:'text',text:'caption',image:{mime:'image/png',data:'aGVsbG8='},submit:true});
@@ -116,7 +120,7 @@ test('image and caption form one safe paste, followed by one Enter', async () =>
 });
 
 test('new OS windows use the selected instance and cwd without executing draft text', async () => {
-  const original = {socket:'/tmp/a',inode:'1',id:4,created:1,processes:'1',cwd:'/work with spaces'};
+  const original = {...stableIdentity,socket:'/tmp/a',inode:'1',id:4,created:1,processes:'1',cwd:'/work with spaces'};
   const created = {...original,id:5};
   const other = {...created,socket:'/tmp/b'};
   let launched = false;
@@ -134,4 +138,54 @@ test('stale selections cannot create a window', async () => {
   const [pane] = await runtime.list(); change();
   await assert.rejects(runtime.action({token:pane.token,action:'create'}),/stale_target/);
   assert.equal(calls.length,0);
+});
+
+
+test('window identity survives runtime and foreground changes without authorizing input', async () => {
+  let pane = { ...stableIdentity, socket: '/tmp/test', inode: '1', id: 4, processes: 'one', title: 'First', cwd: '/first' };
+  const calls = [];
+  const makeRuntime = () => createRuntime({ config: {}, discover: async () => [pane], command: async (...args) => { calls.push(args); } });
+  const firstRuntime = makeRuntime();
+  const [first] = await firstRuntime.list();
+  assert.match(first.windowId, /^[a-f0-9]{64}$/);
+  pane = { ...pane, processes: 'two', title: 'Second', cwd: '/second' };
+  const [foreground] = await firstRuntime.list();
+  assert.equal(foreground.windowId, first.windowId);
+  assert.notEqual(foreground.token, first.token);
+  const restarted = makeRuntime();
+  const [restored] = await restarted.list();
+  assert.equal(restored.windowId, first.windowId);
+  assert.notEqual(restored.token, foreground.token);
+  await assert.rejects(restarted.action({ token: restored.windowId, action: 'key', key: 'enter' }), /stale_target/);
+  await assert.rejects(restarted.action({ windowId: restored.windowId, action: 'key', key: 'enter' }), /invalid_target/);
+  await assert.rejects(restarted.screen(restored.windowId), /stale_target/);
+  assert.equal(calls.length, 0);
+});
+
+test('window identity changes when the host or window is replaced without created_at', async () => {
+  const original = { ...stableIdentity, socket: '/tmp/test', inode: '1', id: 4, processes: 'one' };
+  let pane = original;
+  const runtime = createRuntime({ config: {}, discover: async () => [pane], command: async () => {} });
+  const [first] = await runtime.list();
+  for (const replacement of [
+    { bootId: 'boot-two' },
+    { socket: '/tmp/other' },
+    { inode: '2' },
+    { id: 5 },
+    { rootProcess: [100, '12346'] },
+    { rootProcess: [101, '12345'] },
+    { created: 2 },
+  ]) {
+    pane = { ...original, ...replacement };
+    assert.notEqual((await runtime.list())[0].windowId, first.windowId);
+  }
+});
+
+
+test('preview asset directories default to no extra access and require absolute path arrays', () => {
+  assert.deepEqual(resolveConfig().previewAssetDirectories, []);
+  assert.deepEqual(resolveConfig({ previewAssetDirectories: [tmpdir()] }).previewAssetDirectories, [tmpdir()]);
+  for (const previewAssetDirectories of [null, '/assets', {}, [1], [''], ['relative/assets'], [tmpdir(), false]]) {
+    assert.throws(() => resolveConfig({ previewAssetDirectories }), /previewAssetDirectories/);
+  }
 });

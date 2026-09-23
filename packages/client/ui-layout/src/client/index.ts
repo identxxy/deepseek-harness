@@ -73,7 +73,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      *
      * Current-session-optional: the occupant owns both states without
      * changing its React identity, so it keeps its own state across a session
-     * switch. It receives no owner props; session facts arrive through the
+     * switch. The owner selects compact input; session facts arrive through the
      * framework hooks of the `session-maybe` scope.
      */
     'conversation': { kind: 'single'; scope: 'session-maybe'; owner: ConvOwnerProps }
@@ -102,8 +102,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'workspace.panel': { kind: 'single'; scope: 'root'; owner: PluginPaneOwnerProps }
     /** Plugin-owned pane title and navigation beside layout-owned pane controls. */
     'workspace.panel.header': { kind: 'keyed'; scope: 'root'; owner: PluginPaneOwnerProps }
-    /** One composer below the canvas, addressed to the focused plugin pane. */
-    'workspace.panel.composer': { kind: 'keyed'; scope: 'root'; owner: PluginPaneOwnerProps }
     /** Human Terminal body rendered for each Console pane occurrence. */
     'workspace.console': { kind: 'single'; scope: 'root'; owner: ConsolePaneOwnerProps }
   }
@@ -128,7 +126,12 @@ export interface SidebarOwnerProps {
 }
 
 /** Conversation owner share: business state and actions belong to the registrant. */
-export interface ConvOwnerProps {}
+export interface ConvOwnerProps {
+  /** Use a single-row, expanding input inside an explicit canvas pane. */
+  compactInput?: boolean
+  /** Whether this pane owns input focus; omitted outside the pane canvas. */
+  active?: boolean
+}
 
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
@@ -182,7 +185,6 @@ export function apply(ctx: ClientContext): void {
         'workspace.console': { kind: 'single', scope: 'root' },
         'workspace.panel': { kind: 'single', scope: 'root' },
         'workspace.panel.header': { kind: 'keyed', scope: 'root' },
-        'workspace.panel.composer': { kind: 'keyed', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
       // entry and delivers useStore/actions to AppFrame as standard props.

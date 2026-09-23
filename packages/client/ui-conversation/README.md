@@ -38,6 +38,8 @@ Target packages declaration-merge their snapshot and Location data maps, then re
 
 The package registers the optional-Session `conversation` shell, strict Session header/body entries, View list, composer chain and bar, input regions, Hero regions, queue dock, draft persistence, and phase calculation. `ctx.uiSession.provide()` materializes the Conversation and input sources from the same Session binding and supplies `inputActions` as a stable standard prop.
 
+Explicit layout panes use a compact default composer: text, commands, attachment and Send/Stop share one row, and More options reveals access, plan, model, secondary controls and the statistics dock. Text grows to the existing height cap; a model block exposes its chooser automatically. Hero and implicit conversations keep their ordinary presentation, and temporary composer takeovers keep their own layout. Only the focused pane binds the Session editor and document attachment intake; other panes show a focusable draft mirror. Duplicate panes share Session input state but release their persistence mirrors independently.
+
 View selection is deterministic: a registered persisted selection wins, otherwise registered `chat` wins, otherwise no View renders. It never chooses the first registered View. Shell phase combines Session lifecycle with the active-target set; no target-specific snapshot is read by the shell.
 
 The shell reads the persisted View preference before rendering when a Session first binds or a cached Session becomes current, activates the registered preferred View or Chat fallback, and activates later tab or focus selections before committing them to the store. A blank Session still omits the `conversation.view` slot; no unselected target is activated.

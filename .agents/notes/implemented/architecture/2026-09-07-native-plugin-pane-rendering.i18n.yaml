@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-07-native-plugin-pane-rendering.md
-2026-09-07-native-plugin-pane-rendering.md: a50f7425fe64ce717581f830bba152c451066e5b
-2026-09-07-native-plugin-pane-rendering.zh.md: 6188ff1f9c40158ba525fa5d0272e5dcb70ecd54
+2026-09-07-native-plugin-pane-rendering.md: d53df8e5762e2b131454cce46c0f3cb8fa5ab2bc
+2026-09-07-native-plugin-pane-rendering.zh.md: cb2865f587fa844dae443ce51ea0ef2149160eca

@@ -40,6 +40,7 @@ function hostOver(core: SlotCore): SlotRendererHost {
     subscribe: () => () => {},
   }
   const sessionAdapter: SlotScopeAdapter = {
+    subscribe: () => () => {},
     current: bindingSource,
     resolve: () => undefined,
   }

@@ -3,7 +3,6 @@
 - button "Down arrow"
 - button "Left arrow"
 - button "Right arrow"
-- button "enter"
 - button "escape"
 - button "tab"
 - button "backspace"

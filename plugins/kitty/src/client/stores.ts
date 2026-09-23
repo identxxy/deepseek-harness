@@ -1,6 +1,7 @@
 /** Per-pane terminal selections and shared Kitty display preferences and report drawer. */
 import { defineStore } from '@deepseek-ai/dsh-client-store';
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots';
+import type { KittyWindowId, Pane } from './catalog.ts';
 import type { en } from './locales.ts';
 
 interface KittyInput {
@@ -16,6 +17,8 @@ function emptyInput(): KittyInput {
 
 interface KittyTerminalView {
   selected: string;
+  windowId: KittyWindowId | null;
+  restore: 'pending' | 'missing' | null;
   result: { kind: 'created'; id: number } | { kind: 'stale' } | null;
   follow: boolean;
   appendNewline: boolean;
@@ -25,7 +28,7 @@ interface KittyTerminalView {
 
 interface KittyView {
   panes: Record<string, KittyTerminalView>;
-  lastSelected: string;
+  lastSelected: Pick<Pane, 'token' | 'windowId'> | null;
   previewUrl: string;
   previewRequest: number;
   previewOpen: boolean;
@@ -35,29 +38,54 @@ interface KittyView {
   wideScreen: boolean;
 }
 
+function terminalView(target: KittyView['lastSelected']): KittyTerminalView {
+  return { selected: target?.token ?? '', windowId: target?.windowId ?? null, restore: null, result: null, follow: true, appendNewline: true, inputVersion: 0, input: emptyInput() };
+}
+
+function restoreWindows(value: unknown): KittyView['panes'] {
+  if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1 || !('windows' in value)
+    || Object.keys(value).length !== 2 || !value.windows || typeof value.windows !== 'object' || Array.isArray(value.windows)) throw new Error('Invalid saved Kitty windows');
+  return Object.fromEntries(Object.entries(value.windows).map(([paneId, windowId]) => {
+    if (!paneId || typeof windowId !== 'string' || !/^[a-f0-9]{64}$/.test(windowId)) throw new Error('Invalid saved Kitty window identity');
+    return [paneId, { ...terminalView(null), windowId: windowId as KittyWindowId, restore: 'pending' }];
+  }));
+}
+
 /**
- * Create transient selection state; Kitty tokens are never persisted.
+ * Persist pane-to-window identities; tokens and unfinished input remain transient.
  * @returns the shared root-slot store declaration.
  */
 export function createKittyStore() {
   return defineStore({
-    init: (): KittyView => ({ panes: {}, lastSelected: '', previewUrl: '', previewRequest: 0, previewOpen: false, previewWidth: 640, previewPinned: false, history: false, wideScreen: false }),
+    init: (): KittyView => ({ panes: {}, lastSelected: null, previewUrl: '', previewRequest: 0, previewOpen: false, previewWidth: 640, previewPinned: false, history: false, wideScreen: false }),
+    persist: {
+      name: 'dsh.kitty.windows.v1',
+      select: (state: KittyView) => ({ version: 1, windows: Object.fromEntries(Object.entries(state.panes).filter(([, pane]) => pane.windowId !== null).map(([id, pane]) => [id, pane.windowId])) }),
+      merge: (initial: KittyView, persisted: unknown): KittyView => ({ ...initial, panes: restoreWindows(persisted) }),
+    },
     actions: {
       mountPane: (draft, paneId: string, active: boolean) => {
-        draft.panes[paneId] ??= { selected: draft.lastSelected, result: null, follow: true, appendNewline: true, inputVersion: 0, input: emptyInput() };
-        if (active) draft.lastSelected = draft.panes[paneId].selected;
+        const pane = draft.panes[paneId] ??= terminalView(draft.lastSelected);
+        if (active) draft.lastSelected = pane.selected && pane.windowId ? { token: pane.selected, windowId: pane.windowId } : null;
+      },
+      restorePane: (draft, paneId: string, target: Pick<Pane, 'token' | 'windowId'> | undefined) => {
+        const pane = draft.panes[paneId];
+        if (pane?.restore !== 'pending') return;
+        pane.selected = target?.token ?? '';
+        pane.restore = target ? null : 'missing';
       },
       openPreview: (draft, url: string) => { draft.previewUrl = url; draft.previewRequest++; draft.previewOpen = true; },
       showPreview: draft => { draft.previewOpen = true; },
       closePreview: draft => { draft.previewOpen = false; },
       resizePreview: (draft, width: number) => { draft.previewWidth = Math.max(320, width); },
       pinPreview: (draft, pinned: boolean) => { draft.previewPinned = pinned; },
-      select: (draft, paneId: string | null, token: string) => {
-        draft.lastSelected = token;
+      select: (draft, paneId: string | null, target: KittyView['lastSelected']) => {
+        const token = target?.token ?? '';
+        draft.lastSelected = target ? { token, windowId: target.windowId } : null;
         if (paneId !== null) {
           const previous = draft.panes[paneId];
           draft.panes[paneId] = {
-            selected: token, result: null, follow: previous?.follow ?? true, appendNewline: previous?.appendNewline ?? true,
+            selected: token, windowId: target?.windowId ?? null, restore: null, result: null, follow: previous?.follow ?? true, appendNewline: previous?.appendNewline ?? true,
             inputVersion: previous?.selected === token ? previous.inputVersion : (previous?.inputVersion ?? 0) + 1,
             input: previous?.selected === token ? previous.input : emptyInput(),
           };
@@ -68,7 +96,7 @@ export function createKittyStore() {
         if (pane?.inputVersion !== version) return;
         pane.selected = ''; pane.result = { kind: 'stale' }; pane.inputVersion++; pane.input = emptyInput();
       },
-      created: (draft, paneId: string, id: number) => { const pane = draft.panes[paneId]; pane.selected = ''; pane.result = { kind: 'created', id }; pane.inputVersion++; pane.input = emptyInput(); },
+      created: (draft, paneId: string, id: number) => { const pane = draft.panes[paneId]; pane.selected = ''; pane.windowId = null; pane.restore = null; pane.result = { kind: 'created', id }; pane.inputVersion++; pane.input = emptyInput(); },
       updateInput: (draft, paneId: string, version: number, input: Partial<KittyInput>) => {
         const pane = draft.panes[paneId];
         // Late receipts belong to the selection that dispatched them, even after A → B → A.

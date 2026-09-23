@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, IconChevronLeftOutline14, IconCodeOutline16, IconSettingsOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
-import { endpoint, request, type KittyCatalog } from './catalog.ts';
+import { endpoint, request, type KittyCatalog, type Pane } from './catalog.ts';
 import type { createKittyStore } from './stores.ts';
 import './panel.css';
 
@@ -15,7 +15,7 @@ export type KittyCatalogInjected = {
 
 type KittyBrowserProps = PropsLocale<'dsh.kitty'> & PropsRuntime<'sidebar.page'>
   & PropsStore<ReturnType<typeof createKittyStore>>
-  & InjectFace<KittyCatalogInjected & { open: (paneId: string | null, token: string) => void; backHome: () => void }>;
+  & InjectFace<KittyCatalogInjected & { open: (paneId: string | null, target: Pane) => void; backHome: () => void }>;
 
 /**
  * Render touch-sized window rows, keeping the selected window highlighted.
@@ -82,7 +82,7 @@ export function KittyBrowser({ t, wide, activePaneId, expandSidebar, useCatalog,
     {notice && <p className="dsh-kitty-browser-notice" role="alert">{notice}</p>}
     {failed && <p className="dsh-kitty-browser-notice" role="alert">{t('listFailed')}</p>}
     <div className="dsh-kitty-window-list">
-      {value?.panes.map(pane => <button type="button" key={pane.token} className="dsh-kitty-window" aria-label={`#${pane.id} · ${pane.title}`} aria-pressed={pane.token === selected} disabled={creating} onClick={() => open(activePaneId, pane.token)}>
+      {value?.panes.map(pane => <button type="button" key={pane.token} className="dsh-kitty-window" aria-label={`#${pane.id} · ${pane.title}`} aria-pressed={pane.token === selected} disabled={creating} onClick={() => open(activePaneId, pane)}>
         <IconCodeOutline16/>
         <span className="dsh-kitty-window-info"><span className="dsh-kitty-window-title">{`#${pane.id} · ${pane.title}`}</span><span className="dsh-kitty-window-program">{pane.program}</span><span className="dsh-kitty-window-cwd">{pane.cwd}</span></span>
       </button>)}

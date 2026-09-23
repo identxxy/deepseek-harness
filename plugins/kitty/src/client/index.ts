@@ -5,11 +5,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import { KittyAction, KittyPane } from './panel.tsx';
-import { KittyComposer } from './composer.tsx';
 import { KittyBrowser } from './sidebar.tsx';
 import { KittyHeader } from './header.tsx';
 import { KittyPreview } from './preview.tsx';
-import { KittyCatalog } from './catalog.ts';
+import { KittyCatalog, type Pane } from './catalog.ts';
 import { createKittyStore, type KittyActions } from './stores.ts';
 import { en, zh } from './locales.ts';
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -34,7 +33,7 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('sidebar.primary.action', () => ctx.slots.register({
     name: 'sidebar.primary.action', id: 'kitty-terminal', order: 10, locale: 'dsh.kitty', store,
     inject: (actions: KittyActions) => ({ open: (paneId: string | null) => {
-      actions.select(paneId, '');
+      actions.select(paneId, null);
       ctx.layout.openActor({ kind: 'panel', id: 'Kitty' });
       ctx.layout.closeDetails();
       ctx.layout.openSidebarPage('kitty');
@@ -42,8 +41,8 @@ export function apply(ctx: Context): void {
   }, KittyAction));
   ctx.slots.inject('sidebar.page', () => ctx.slots.register({
     name: 'sidebar.page', key: 'kitty', locale: 'dsh.kitty', store,
-    inject: (actions: KittyActions) => ({ ...catalogProps, backHome: () => ctx.layout.closeSidebarPage(), open: (paneId: string | null, token: string) => {
-      actions.select(paneId, token);
+    inject: (actions: KittyActions) => ({ ...catalogProps, backHome: () => ctx.layout.closeSidebarPage(), open: (paneId: string | null, target: Pane) => {
+      actions.select(paneId, target);
       ctx.layout.openActor({ kind: 'panel', id: 'Kitty' });
       ctx.layout.closeDetails();
       ctx.layout.showConversation();
@@ -51,12 +50,8 @@ export function apply(ctx: Context): void {
   }, KittyBrowser));
   ctx.slots.inject('workspace.panel', () => ctx.slots.register({
     name: 'workspace.panel', locale: 'dsh.kitty', store,
-    inject: () => ({ ...catalogProps, browse: () => ctx.layout.openSidebarPage('kitty') }),
-  }, KittyPane));
-  ctx.slots.inject('workspace.panel.composer', () => ctx.slots.register({
-    name: 'workspace.panel.composer', key: 'Kitty', locale: 'dsh.kitty', store,
     inject: () => ({ ...catalogProps, attachmentT: ctx.locale.bind('conversation'), browse: () => ctx.layout.openSidebarPage('kitty') }),
-  }, KittyComposer));
+  }, KittyPane));
   ctx.slots.inject('workspace.panel.header', () => ctx.slots.register({
     name: 'workspace.panel.header', key: 'Kitty', locale: 'dsh.kitty', store,
     inject: () => ({ ...catalogProps, browse: () => ctx.layout.openSidebarPage('kitty') }),

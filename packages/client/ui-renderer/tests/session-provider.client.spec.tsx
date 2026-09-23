@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { Fragment, useEffect, useRef } from 'react'
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
-import { act, render } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, render } from '@testing-library/react'
 import type {
   SessionProviderComponent, StoredEntry,
 } from '@deepseek-ai/dsh-client-ui-slots'
@@ -11,12 +11,16 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { createSlotRenderer } from '../src/client/scoped-slots.tsx'
 
+afterEach(cleanup)
+
+type SessionId = NonNullable<Parameters<SessionProviderComponent>[0]['sessionId']>
 type SessionBinding = ScopedStandardSourceBinding
 
 function observable<T>(initial: T) {
   let value = initial
   const subs = new Set<() => void>()
   return {
+    listenerCount: () => subs.size,
     getSnapshot: () => value,
     subscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn) } },
     set: (next: T) => { value = next; for (const fn of [...subs]) fn() },
@@ -47,6 +51,8 @@ function makeHost(
   const currentBinding = observable<StandardSourceBinding>(absentBinding)
   let currentId: string | undefined
   const bindings = new Map<string, SessionBinding>()
+  const bindingRevision = observable(0)
+  const publishBindings = () => { bindingRevision.set(bindingRevision.getSnapshot() + 1) }
   const sessionEntries: StoredEntry[] = []
   const root = observable<StandardSourceBinding>({
     key: undefined,
@@ -56,6 +62,7 @@ function makeHost(
   })
   const sessionAdapter: SlotScopeAdapter = {
     current: currentBinding,
+    subscribe: bindingRevision.subscribe,
     resolve: key => bindings.get(key),
     ...(options.installRenderArea === false
       ? {}
@@ -90,6 +97,8 @@ function makeHost(
   }
   return {
     host,
+    bindingListenerCount: bindingRevision.listenerCount,
+    removeSession: (id: string) => { bindings.delete(id); publishBindings() },
     // Driver surface: set(id) publishes the resolved binding (or the absent
     // projection) through the scope adapter.
     current: {
@@ -108,12 +117,14 @@ function makeHost(
         props: { sessionId: id },
       }
       bindings.set(id, binding)
+      publishBindings()
       if (currentId === id) currentBinding.set(binding)
       return binding
     },
     /** Swap one session's binding in place (roster-change stand-in); republish when current. */
     replaceSession: (binding: SessionBinding) => {
       bindings.set(binding.key, binding)
+      publishBindings()
       if (currentId === binding.key) currentBinding.set(binding)
     },
     registerSession: (entry: StoredEntry) => { sessionEntries.push(entry) },
@@ -226,6 +237,59 @@ describe('SessionProvider', () => {
     // must carry it to already-mounted entries without a selection change.
     act(() => { h.replaceSession({ ...original, props: { feature: 'now-live' } }) })
     expect(seen.at(-1)).toBe('now-live')
+  })
+
+  it('binds explicit Sessions independently and reacts to late, rebuilt and released bindings', () => {
+    const h = makeHost({
+      root: (renderSlot, SessionProvider) => <>
+        <SessionProvider sessionId={'a' as SessionId} empty={() => <i>missing-a</i>}>
+          {renderSlot('k.session', {})}
+        </SessionProvider>
+        <SessionProvider sessionId={'b' as SessionId} empty={() => <i>missing-b</i>}>
+          {renderSlot('k.session', {})}
+        </SessionProvider>
+      </>,
+    })
+    const a = h.addSession('a')
+    h.addSession('global')
+    h.current.set('global')
+    const stores = new Map<string, {
+      getSnapshot: () => string
+      subscribe: () => () => void
+      actions: Record<string, (...args: never[]) => void>
+    }>()
+    h.host.storeOf = (_entry, binding) => {
+      if (binding === undefined) return undefined
+      let store = stores.get(binding.key)
+      if (store === undefined) {
+        store = { getSnapshot: () => `store-${binding.key}`, subscribe: () => () => {}, actions: {} }
+        stores.set(binding.key, store)
+      }
+      return store
+    }
+    h.registerSession({
+      component: (props: {
+        useSession: (selector: (value: { sid: string }) => string) => string
+        useStore: (selector: (value: string) => string) => string
+        injected: string
+        feature?: string
+      }) => <b>{[props.useSession(value => value.sid), props.injected, props.useStore(value => value), props.feature ?? '-'].join(':')}</b>,
+      inject: (id: string) => ({ injected: `inject-${id}` }),
+      options: {},
+    })
+    const view = render(<>{createSlotRenderer().renderRoot(h.host, {})}</>)
+    expect(view.container.textContent).toBe('a:inject-a:store-a:-missing-b')
+    expect(h.bindingListenerCount()).toBe(2)
+    act(() => { h.current.set(undefined) })
+    expect(view.container.textContent).toBe('a:inject-a:store-a:-missing-b')
+    act(() => { h.addSession('b') })
+    expect(view.container.textContent).toBe('a:inject-a:store-a:-b:inject-b:store-b:-')
+    act(() => { h.replaceSession({ ...a, props: { ...a.props, feature: 'rebuilt' } }) })
+    expect(view.container.textContent).toBe('a:inject-a:store-a:rebuiltb:inject-b:store-b:-')
+    act(() => { h.removeSession('a') })
+    expect(view.container.textContent).toBe('missing-ab:inject-b:store-b:-')
+    view.unmount()
+    expect(h.bindingListenerCount()).toBe(0)
   })
 
   it('fails loud when the Session scope owner omits its area renderer', () => {
